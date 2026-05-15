@@ -1,0 +1,47 @@
+# The directory Mix will write compiled artifacts to.
+/_build/
+
+# If you run "mix test --cover", coverage assets end up here.
+/cover/
+
+# The directory Mix downloads your dependencies sources to.
+/deps/
+
+# Where 3rd-party dependencies like ExDoc output generated docs.
+/doc/
+
+# Ignore .fetch files in case you like to edit your project deps locally.
+/.fetch
+
+# If the VM crashes, it generates a dump, let's ignore it too.
+erl_crash.dump
+
+# Also ignore archive artifacts (built via "mix archive.build").
+*.ez
+
+# Ignore package tarball (built via "mix hex.build").
+oban_ui-*.tar
+
+# Temporary files, for example, from tests.
+/tmp/
+
+# Node modules (assets pipeline)
+/assets/node_modules/
+
+# Compiled/digested static assets are committed to priv/static for distribution.
+# However, build intermediaries and cache files should be ignored.
+/priv/static/cache_manifest.json
+
+# Local env overrides
+/.env
+/.env.*
+!/.env.example
+
+# IDE
+.elixir_ls/
+.lexical/
+.idea/
+.vscode/
+
+# Claude Code personal settings (shared agents/commands stay in .claude/)
+.claude/settings.local.json

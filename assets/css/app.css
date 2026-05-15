@@ -1,0 +1,159 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Library-scoped resets — never leak to host pages. */
+.oban-ui-root {
+  @apply min-h-screen bg-oban-50 text-slate-900 antialiased;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    sans-serif;
+}
+
+[data-theme="dark"] .oban-ui-root {
+  @apply bg-oban-950 text-slate-100;
+}
+
+/* Layout */
+.oban-ui-layout {
+  @apply flex min-h-screen;
+}
+
+.oban-ui-sidebar {
+  @apply hidden md:flex flex-col w-56 shrink-0 bg-oban-900 text-slate-100 px-3 py-4;
+}
+
+.oban-ui-main {
+  @apply flex-1 min-w-0 flex flex-col;
+}
+
+.oban-ui-topbar {
+  @apply flex items-center justify-between px-4 py-2 border-b border-slate-200 bg-white;
+}
+
+[data-theme="dark"] .oban-ui-topbar {
+  @apply bg-oban-900 border-oban-800 text-slate-100;
+}
+
+.oban-ui-content {
+  @apply p-4 md:p-6 flex-1 min-w-0;
+}
+
+/* Nav links */
+.oban-ui-nav-link {
+  @apply block rounded-md px-3 py-2 text-sm font-medium text-slate-300 hover:bg-oban-800 hover:text-white;
+}
+
+.oban-ui-nav-link[aria-current="page"] {
+  @apply bg-oban-700 text-white;
+}
+
+/* Tables */
+.oban-ui-table {
+  @apply w-full text-sm text-left;
+}
+
+.oban-ui-table thead {
+  @apply text-xs uppercase text-slate-500 bg-slate-100;
+}
+
+[data-theme="dark"] .oban-ui-table thead {
+  @apply bg-oban-800 text-slate-300;
+}
+
+.oban-ui-table tbody tr {
+  @apply border-b border-slate-200 hover:bg-slate-50;
+}
+
+[data-theme="dark"] .oban-ui-table tbody tr {
+  @apply border-oban-800 hover:bg-oban-800/50;
+}
+
+.oban-ui-table th,
+.oban-ui-table td {
+  @apply px-3 py-2 align-top;
+}
+
+/* State badges */
+.oban-ui-badge {
+  @apply inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium;
+}
+
+.oban-ui-badge[data-state="available"] {
+  @apply bg-blue-100 text-blue-800;
+}
+.oban-ui-badge[data-state="executing"] {
+  @apply bg-emerald-100 text-emerald-800;
+}
+.oban-ui-badge[data-state="scheduled"] {
+  @apply bg-violet-100 text-violet-800;
+}
+.oban-ui-badge[data-state="retryable"] {
+  @apply bg-amber-100 text-amber-800;
+}
+.oban-ui-badge[data-state="completed"] {
+  @apply bg-green-100 text-green-800;
+}
+.oban-ui-badge[data-state="cancelled"] {
+  @apply bg-gray-100 text-gray-800;
+}
+.oban-ui-badge[data-state="discarded"] {
+  @apply bg-red-100 text-red-800;
+}
+
+/* Buttons */
+.oban-ui-btn {
+  @apply inline-flex items-center justify-center rounded-md px-3 py-1.5 text-sm font-medium shadow-sm focus:outline-none focus-visible:ring-2;
+}
+
+.oban-ui-btn-primary {
+  @apply oban-ui-btn bg-oban-600 text-white hover:bg-oban-700 focus-visible:ring-oban-500;
+}
+
+.oban-ui-btn-secondary {
+  @apply oban-ui-btn bg-white text-slate-700 border border-slate-300 hover:bg-slate-50 focus-visible:ring-slate-400;
+}
+
+[data-theme="dark"] .oban-ui-btn-secondary {
+  @apply bg-oban-800 text-slate-100 border-oban-700 hover:bg-oban-700;
+}
+
+.oban-ui-btn-danger {
+  @apply oban-ui-btn bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500;
+}
+
+.oban-ui-btn[disabled],
+.oban-ui-btn[aria-disabled="true"] {
+  @apply opacity-50 cursor-not-allowed pointer-events-none;
+}
+
+/* Cards */
+.oban-ui-card {
+  @apply rounded-lg border border-slate-200 bg-white p-4 shadow-sm;
+}
+
+[data-theme="dark"] .oban-ui-card {
+  @apply bg-oban-900 border-oban-800;
+}
+
+/* Drawers */
+.oban-ui-drawer {
+  @apply fixed inset-y-0 right-0 w-full max-w-2xl bg-white shadow-xl border-l border-slate-200 z-40 overflow-y-auto;
+}
+
+[data-theme="dark"] .oban-ui-drawer {
+  @apply bg-oban-900 border-oban-800;
+}
+
+/* Forms */
+.oban-ui-input {
+  @apply block w-full rounded-md border border-slate-300 px-3 py-1.5 text-sm shadow-sm focus:border-oban-500 focus:ring-1 focus:ring-oban-500;
+}
+
+[data-theme="dark"] .oban-ui-input {
+  @apply bg-oban-800 border-oban-700 text-slate-100;
+}
+
+/* Pre/code blocks for args, errors */
+.oban-ui-pre {
+  @apply rounded-md bg-slate-900 text-slate-100 p-3 text-xs overflow-x-auto font-mono;
+}
