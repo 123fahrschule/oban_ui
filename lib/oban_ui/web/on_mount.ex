@@ -43,6 +43,9 @@ defmodule ObanUI.Web.OnMount do
           if atom in oban_names, do: atom, else: hd(oban_names)
       end
 
+    nonce_key = opts[:csp_nonce_assign_key]
+    nonce = if nonce_key && is_atom(nonce_key), do: Map.get(socket.assigns, nonce_key), else: nil
+
     socket =
       socket
       |> assign(:resolver, resolver)
@@ -52,7 +55,8 @@ defmodule ObanUI.Web.OnMount do
       |> assign(:oban_names, oban_names)
       |> assign(:active_oban, instance)
       |> assign(:base_path, base_path)
-      |> assign(:csp_nonce_assign_key, opts[:csp_nonce_assign_key])
+      |> assign(:csp_nonce_assign_key, nonce_key)
+      |> assign(:csp_nonce, nonce)
 
     {:cont, socket}
   rescue

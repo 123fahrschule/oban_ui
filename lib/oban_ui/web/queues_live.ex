@@ -394,17 +394,21 @@ defmodule ObanUI.Web.QueuesLive do
 
   defp flash_bar(assigns) do
     ~H"""
-    <div
-      :if={Phoenix.Flash.get(@flash, :error)}
-      class="rounded-md bg-red-50 text-red-800 px-3 py-2 mb-3"
-    >
-      {Phoenix.Flash.get(@flash, :error)}
-    </div>
-    <div
-      :if={Phoenix.Flash.get(@flash, :info)}
-      class="rounded-md bg-emerald-50 text-emerald-800 px-3 py-2 mb-3"
-    >
-      {Phoenix.Flash.get(@flash, :info)}
+    <div aria-live="polite" aria-atomic="true">
+      <div
+        :if={Phoenix.Flash.get(@flash, :error)}
+        role="alert"
+        class="rounded-md bg-red-50 text-red-800 px-3 py-2 mb-3"
+      >
+        {Phoenix.Flash.get(@flash, :error)}
+      </div>
+      <div
+        :if={Phoenix.Flash.get(@flash, :info)}
+        role="status"
+        class="rounded-md bg-emerald-50 text-emerald-800 px-3 py-2 mb-3"
+      >
+        {Phoenix.Flash.get(@flash, :info)}
+      </div>
     </div>
     """
   end

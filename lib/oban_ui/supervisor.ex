@@ -26,11 +26,13 @@ defmodule ObanUI.Supervisor do
     Supervisor.init(children, strategy: :one_for_one, max_restarts: 5, max_seconds: 60)
   end
 
-  defp stats_children(%Config{stats: %{enabled: true}}) do
-    [
+  defp stats_children(%Config{stats: %{enabled: true} = stats}) do
+    base = [
       ObanUI.Stats.Recorder,
       {Stats.Pruner, []}
     ]
+
+    if Map.get(stats, :persist, false), do: base ++ [{Stats.Persistor, []}], else: base
   end
 
   defp stats_children(_), do: []

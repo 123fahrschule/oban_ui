@@ -60,6 +60,13 @@ module.exports = {
         ".phx-change-loading&",
         ".phx-change-loading &"
       ]);
+      // Surfaced when LiveSocket loses its connection. The host page gets
+      // `class="phx-disconnected"` on <html>; we use it to reveal the
+      // reconnecting banner in the root layout.
+      addVariant("phx-disconnected", [
+        ".phx-disconnected&",
+        ".phx-disconnected &"
+      ]);
     })
   ]
 };

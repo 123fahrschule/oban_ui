@@ -8456,6 +8456,10 @@ removing illegal node: "${(childNode.outerHTML || childNode.nodeValue).trim()}"
       }
       document.documentElement.dataset.theme = effective;
       this.el.dataset.theme = stored;
+      this.el.setAttribute(
+        "aria-label",
+        `Theme: ${stored}. Click to switch.`
+      );
     }
   };
   function nextTheme(current) {
@@ -8484,7 +8488,7 @@ removing illegal node: "${(childNode.outerHTML || childNode.nodeValue).trim()}"
       const max = Math.max(1, ...values);
       const step = w / Math.max(1, values.length - 1);
       const points = values.map((v, i) => `${(i * step).toFixed(1)},${(h - v / max * h).toFixed(1)}`).join(" ");
-      this.el.innerHTML = `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" width="${w}" height="${h}"><polyline fill="none" stroke="currentColor" stroke-width="1.5" points="${points}"/></svg>`;
+      this.el.innerHTML = `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" width="${w}" height="${h}" role="img" aria-label="Sparkline: ${values.length} points, max ${max}"><polyline fill="none" stroke="currentColor" stroke-width="1.5" points="${points}"/></svg>`;
     }
   };
   var ConfirmAction = {
@@ -8498,7 +8502,113 @@ removing illegal node: "${(childNode.outerHTML || childNode.nodeValue).trim()}"
       });
     }
   };
-  var Hooks2 = { ThemeToggle, Sparkline, ConfirmAction };
+  var FOCUSABLE = "a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])";
+  var DrawerFocusTrap = {
+    mounted() {
+      this._previouslyFocused = document.activeElement;
+      this._keydownHandler = (e) => this.handleKey(e);
+      this.el.addEventListener("keydown", this._keydownHandler);
+      requestAnimationFrame(() => this.focusFirst());
+    },
+    destroyed() {
+      if (this._keydownHandler) {
+        this.el.removeEventListener("keydown", this._keydownHandler);
+      }
+      if (this._previouslyFocused && this._previouslyFocused.focus) {
+        this._previouslyFocused.focus();
+      }
+    },
+    handleKey(e) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        this.pushEvent("close_detail", {});
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const focusables = Array.from(this.el.querySelectorAll(FOCUSABLE)).filter(
+        (el) => el.offsetParent !== null
+      );
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    },
+    focusFirst() {
+      const focusables = this.el.querySelectorAll(FOCUSABLE);
+      if (focusables.length > 0) focusables[0].focus();
+    }
+  };
+  var KeyboardShortcuts = {
+    mounted() {
+      this._gPressed = false;
+      this._gTimer = null;
+      this._keydownHandler = (e) => this.handleKey(e);
+      document.addEventListener("keydown", this._keydownHandler);
+    },
+    destroyed() {
+      document.removeEventListener("keydown", this._keydownHandler);
+      if (this._gTimer) clearTimeout(this._gTimer);
+    },
+    handleKey(e) {
+      const target = e.target;
+      const tag = target && target.tagName || "";
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target && target.isContentEditable) {
+        return;
+      }
+      if (this._gPressed) {
+        const base = this.el.dataset.basePath || "/oban";
+        switch (e.key) {
+          case "d":
+          case "h":
+            window.location.assign(base + "/");
+            break;
+          case "j":
+            window.location.assign(base + "/jobs");
+            break;
+          case "q":
+            window.location.assign(base + "/queues");
+            break;
+          case "c":
+            window.location.assign(base + "/crons");
+            break;
+        }
+        this._gPressed = false;
+        if (this._gTimer) clearTimeout(this._gTimer);
+        return;
+      }
+      if (e.key === "/") {
+        const first = document.querySelector(
+          "form input:not([type=hidden]):not([disabled])"
+        );
+        if (first) {
+          e.preventDefault();
+          first.focus();
+        }
+      } else if (e.key === "g") {
+        this._gPressed = true;
+        this._gTimer = setTimeout(() => this._gPressed = false, 1200);
+      } else if (e.key === "Escape") {
+        const closeBtn = document.querySelector(
+          '[phx-click="close_detail"], [aria-label="Close"]'
+        );
+        if (closeBtn) closeBtn.click();
+      }
+    }
+  };
+  var Hooks2 = {
+    ThemeToggle,
+    Sparkline,
+    ConfirmAction,
+    DrawerFocusTrap,
+    KeyboardShortcuts
+  };
   function csrfToken() {
     const meta = document.querySelector("meta[name='csrf-token']");
     return meta ? meta.getAttribute("content") : null;

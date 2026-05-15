@@ -643,15 +643,17 @@ defmodule ObanUI.Web.JobsLive do
 
       <.bulk_panel :if={@bulk_state} state={@bulk_state} />
 
-      <table class="oban-ui-table">
+      <table class="oban-ui-table" role="table" aria-label="Jobs">
+        <caption class="sr-only">List of Oban jobs matching the current filters</caption>
         <thead>
           <tr>
-            <th class="w-6">
+            <th class="w-6" scope="col">
               <input
                 type="checkbox"
                 disabled={true}
                 checked={MapSet.size(@selected_ids) > 0}
                 title="Use row checkboxes"
+                aria-label="Select all (use per-row checkboxes)"
               />
             </th>
             <.sort_th field={:id} label="ID" sort={@sort} />
@@ -672,6 +674,7 @@ defmodule ObanUI.Web.JobsLive do
                 phx-click="toggle_select"
                 phx-value-id={job.id}
                 checked={MapSet.member?(@selected_ids, job.id)}
+                aria-label={"Select job " <> Integer.to_string(job.id)}
               />
             </td>
             <td class="font-mono">
@@ -861,17 +864,21 @@ defmodule ObanUI.Web.JobsLive do
 
   defp flash_bar(assigns) do
     ~H"""
-    <div
-      :if={Phoenix.Flash.get(@flash, :error)}
-      class="rounded-md bg-red-50 text-red-800 px-3 py-2 mb-3"
-    >
-      {Phoenix.Flash.get(@flash, :error)}
-    </div>
-    <div
-      :if={Phoenix.Flash.get(@flash, :info)}
-      class="rounded-md bg-emerald-50 text-emerald-800 px-3 py-2 mb-3"
-    >
-      {Phoenix.Flash.get(@flash, :info)}
+    <div aria-live="polite" aria-atomic="true">
+      <div
+        :if={Phoenix.Flash.get(@flash, :error)}
+        role="alert"
+        class="rounded-md bg-red-50 text-red-800 px-3 py-2 mb-3"
+      >
+        {Phoenix.Flash.get(@flash, :error)}
+      </div>
+      <div
+        :if={Phoenix.Flash.get(@flash, :info)}
+        role="status"
+        class="rounded-md bg-emerald-50 text-emerald-800 px-3 py-2 mb-3"
+      >
+        {Phoenix.Flash.get(@flash, :info)}
+      </div>
     </div>
     """
   end
@@ -910,11 +917,22 @@ defmodule ObanUI.Web.JobsLive do
       |> assign(:editable?, editable?)
 
     ~H"""
-    <aside class="oban-ui-drawer p-5">
+    <aside
+      class="oban-ui-drawer p-5"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={"job-detail-title-" <> Integer.to_string(@job.id)}
+      id={"job-detail-drawer-" <> Integer.to_string(@job.id)}
+      phx-hook="DrawerFocusTrap"
+      tabindex="-1"
+    >
       <div class="flex items-start justify-between mb-3">
         <div>
           <p class="text-xs text-slate-500">Job #{@job.id}</p>
-          <h2 class="text-lg font-semibold">{@job.worker}</h2>
+          <h2
+            id={"job-detail-title-" <> Integer.to_string(@job.id)}
+            class="text-lg font-semibold"
+          >{@job.worker}</h2>
           <p class="text-xs text-slate-500">
             <.state_badge state={@job.state} /> · {@job.queue} · attempt {@job.attempt}/{@job.max_attempts}
           </p>
@@ -923,7 +941,7 @@ defmodule ObanUI.Web.JobsLive do
           type="button"
           class="oban-ui-btn-secondary"
           phx-click="close_detail"
-          aria-label="Close"
+          aria-label="Close detail"
         >×</button>
       </div>
 
