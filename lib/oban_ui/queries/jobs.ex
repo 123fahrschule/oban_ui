@@ -158,12 +158,23 @@ defmodule ObanUI.Queries.Jobs do
   defp apply_filter({:states, [_ | _] = states}, q),
     do: from(j in q, where: j.state in ^states)
 
-  defp apply_filter({:queues, [_ | _] = queues}, q),
-    do: from(j in q, where: j.queue in ^queues)
+  # Queues and workers accept multiple comma-separated needles and match any of
+  # them via case-insensitive substring. Exact module names like
+  # `MyApp.Workers.SendEmail` are long and inconvenient to remember; "SendEmail"
+  # finds them just as well.
+  defp apply_filter({:queues, [_ | _] = queues}, q) do
+    patterns = like_patterns(queues)
+    from(j in q, where: fragment("? ILIKE ANY (?)", j.queue, ^patterns))
+  end
 
-  defp apply_filter({:workers, [_ | _] = workers}, q),
-    do: from(j in q, where: j.worker in ^workers)
+  defp apply_filter({:workers, [_ | _] = workers}, q) do
+    patterns = like_patterns(workers)
+    from(j in q, where: fragment("? ILIKE ANY (?)", j.worker, ^patterns))
+  end
 
+  # Tags are stored as a Postgres array — overlap with exact tag values.
+  # Tag names are typically short and chosen by the host, so partial matching
+  # would surprise more than it helps.
   defp apply_filter({:tags, [_ | _] = tags}, q),
     do: from(j in q, where: fragment("? && ?", j.tags, ^tags))
 
@@ -259,6 +270,12 @@ defmodule ObanUI.Queries.Jobs do
 
   defp clamp_page_size(n) when is_integer(n) and n > 0 and n <= @max_page_size, do: n
   defp clamp_page_size(_), do: @default_page_size
+
+  defp like_patterns(values) do
+    Enum.map(values, fn v ->
+      "%" <> String.replace(v, ~w(% _), &("\\" <> &1)) <> "%"
+    end)
+  end
 
   defp take_with_cursor(results, page_size, {field, _dir}) do
     case Enum.split(results, page_size) do

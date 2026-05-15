@@ -50,7 +50,10 @@ defmodule ObanUI.Web.Components.Layout do
               names={@oban_names}
               active={@active_oban}
             />
-            <span :if={@user_display} class="text-slate-500">{@user_display.name}</span>
+            <span
+              :if={@user_display && @user_display.name not in [nil, "", "anonymous"]}
+              class="text-slate-500"
+            >{@user_display.name}</span>
           </div>
           <div class="flex items-center gap-2">
             <.theme_toggle />
@@ -70,10 +73,11 @@ defmodule ObanUI.Web.Components.Layout do
   defp instance_picker(assigns) do
     ~H"""
     <label class="flex items-center gap-1 text-xs text-slate-500">
-      Instance
+      <span>Instance</span>
       <select
-        class="oban-ui-input text-xs h-7 py-0"
+        class="oban-ui-input text-xs py-1 leading-tight"
         phx-change="switch_instance"
+        aria-label="Active Oban instance"
       >
         <option :for={name <- @names} value={name} selected={name == @active}>{name}</option>
       </select>

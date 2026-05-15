@@ -23,6 +23,29 @@ defmodule ObanUI.Queries.JobsFilterTest do
     assert Enum.map(jobs, & &1.priority) |> Enum.sort() == [0, 9]
   end
 
+  test "workers filter does case-insensitive substring matching" do
+    insert!(%{worker: "MyApp.Workers.FlakyWorker"})
+    insert!(%{worker: "MyApp.Workers.NoopWorker"})
+
+    # Just "Flaky" should pick up the full module name
+    {jobs, _} = JobsQuery.list(%{workers: ["Flaky"]})
+    assert length(jobs) == 1
+    assert hd(jobs).worker =~ "Flaky"
+
+    # Lowercase too
+    {jobs2, _} = JobsQuery.list(%{workers: ["flaky"]})
+    assert length(jobs2) == 1
+  end
+
+  test "queues filter does case-insensitive substring matching" do
+    insert!(%{queue: "mailers"})
+    insert!(%{queue: "media"})
+
+    {jobs, _} = JobsQuery.list(%{queues: ["MAIL"]})
+    assert length(jobs) == 1
+    assert hd(jobs).queue == "mailers"
+  end
+
   test "tags filter uses array overlap" do
     insert!(%{tags: ["billing", "urgent"]})
     insert!(%{tags: ["billing"]})

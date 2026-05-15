@@ -32,6 +32,7 @@ defmodule ObanUI.Web.JobsLive do
   alias ObanUI.Queries.Jobs, as: JobsQuery
   alias ObanUI.Queries.Suggestions
   alias ObanUI.Web.Components.{EmptyState, Timeline}
+  alias Phoenix.LiveView.JS
 
   @page_size 25
 
@@ -526,6 +527,32 @@ defmodule ObanUI.Web.JobsLive do
 
   defp pubsub, do: ObanUI.Config.fetch!().pubsub
 
+  # 60-char single-line truncation of the args payload after running it through
+  # the host resolver's format_job_args/1. Strings are shown verbatim (after
+  # newline collapsing), everything else via inspect/2.
+  defp preview_args(args, resolver) do
+    rendered =
+      if function_exported?(resolver, :format_job_args, 1) do
+        resolver.format_job_args(args)
+      else
+        args
+      end
+
+    text =
+      case rendered do
+        binary when is_binary(binary) -> binary
+        other -> inspect(other, limit: 5, printable_limit: 80)
+      end
+
+    text
+    |> String.replace(~r/\s+/, " ")
+    |> String.trim()
+    |> truncate(80)
+  end
+
+  defp truncate(s, n) when byte_size(s) <= n, do: s
+  defp truncate(s, n), do: binary_part(s, 0, n) <> "…"
+
   defp format_dt_input(nil), do: ""
 
   defp format_dt_input(%DateTime{} = dt) do
@@ -673,15 +700,21 @@ defmodule ObanUI.Web.JobsLive do
             <.sort_th field={:state} label="State" sort={@sort} />
             <.sort_th field={:queue} label="Queue" sort={@sort} />
             <.sort_th field={:worker} label="Worker" sort={@sort} />
+            <th scope="col">Args</th>
             <.sort_th field={:priority} label="Prio" sort={@sort} />
-            <th>Attempt</th>
+            <th scope="col">Attempt</th>
             <.sort_th field={:inserted_at} label="Inserted" sort={@sort} />
-            <th class="text-right">Actions</th>
+            <th class="text-right" scope="col">Actions</th>
           </tr>
         </thead>
         <tbody id="jobs" phx-update="stream">
-          <tr :for={{dom_id, job} <- @streams.jobs} id={dom_id}>
-            <td>
+          <tr
+            :for={{dom_id, job} <- @streams.jobs}
+            id={dom_id}
+            phx-click={JS.patch(detail_path(@socket, @base_path, @oban_names, @active_oban, job.id))}
+            class="cursor-pointer hover:bg-slate-50"
+          >
+            <td onclick="event.stopPropagation()">
               <input
                 type="checkbox"
                 phx-click="toggle_select"
@@ -690,18 +723,19 @@ defmodule ObanUI.Web.JobsLive do
                 aria-label={"Select job " <> Integer.to_string(job.id)}
               />
             </td>
-            <td class="font-mono">
-              <.link patch={detail_path(@socket, @base_path, @oban_names, @active_oban, job.id)}>
-                {job.id}
-              </.link>
-            </td>
+            <td class="font-mono">{job.id}</td>
             <td><.state_badge state={job.state} /></td>
             <td>{job.queue}</td>
             <td class="font-mono text-xs">{job.worker}</td>
+            <td class="font-mono text-xs text-slate-600 max-w-xs">
+              <span class="block truncate" title={preview_args(job.args, @resolver)}>
+                {preview_args(job.args, @resolver)}
+              </span>
+            </td>
             <td>{job.priority}</td>
             <td>{job.attempt}/{job.max_attempts}</td>
             <td><.relative_time datetime={job.inserted_at} /></td>
-            <td class="text-right space-x-1">
+            <td class="text-right space-x-1" onclick="event.stopPropagation()">
               <.button
                 variant="secondary"
                 can?={@access.retry_jobs and job.state in ~w(cancelled discarded retryable scheduled completed)}
