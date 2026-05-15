@@ -31,7 +31,7 @@ defmodule ObanUI.Web.JobsLive do
   alias ObanUI.Jobs.Edit
   alias ObanUI.Queries.Jobs, as: JobsQuery
   alias ObanUI.Queries.Suggestions
-  alias ObanUI.Web.Components.{EmptyState, Timeline}
+  alias ObanUI.Web.Components.{Combobox, EmptyState, Timeline}
   alias Phoenix.LiveView.JS
 
   @page_size 25
@@ -234,8 +234,19 @@ defmodule ObanUI.Web.JobsLive do
 
   @impl true
   def handle_event("filter", params, socket) do
-    query = build_query(params)
-    {:noreply, push_patch(socket, to: jobs_path(socket, query))}
+    # The state-tabs and sort buttons live outside the form, so a plain
+    # phx-change firing would wipe them out of the URL. Merge the form-only
+    # fields back into the existing filter state to preserve them.
+    query =
+      socket
+      |> build_query_from_filters()
+      |> Map.merge(build_query(params))
+      |> drop_empty()
+
+    {:noreply,
+     socket
+     |> assign(:suggestions, %{worker: [], queue: [], tags: [], nodes: []})
+     |> push_patch(to: jobs_path(socket, query))}
   end
 
   def handle_event("clear_filters", _params, socket) do
@@ -275,19 +286,46 @@ defmodule ObanUI.Web.JobsLive do
     {:noreply, push_patch(socket, to: jobs_path(socket, query))}
   end
 
-  def handle_event("suggest", %{"field" => field, "value" => value}, socket) do
-    key = String.to_existing_atom(field)
+  def handle_event("suggest", %{"field" => field} = params, socket) do
+    # phx-keyup sends the current input value as `value`; older Phoenix versions
+    # used the `_target`/payload shape. Accept either.
+    typed = params["value"] || get_in(params, [field]) || ""
+    key = suggestion_key(field)
 
     values =
       case key do
-        :worker -> Suggestions.workers(value)
-        :queue -> Suggestions.queues(value)
-        :tags -> Suggestions.tags(value)
-        :node -> Suggestions.nodes(value)
+        :worker -> Suggestions.workers(typed)
+        :queue -> Suggestions.queues(typed)
+        :tags -> Suggestions.tags(typed)
+        :nodes -> Suggestions.nodes(typed)
         _ -> []
       end
 
-    {:noreply, assign(socket, :suggestions, Map.put(socket.assigns.suggestions, key, values))}
+    # Hide the dropdown automatically when the input is empty so the page
+    # doesn't show a stale list.
+    values = if typed == "", do: [], else: values
+
+    {:noreply,
+     assign(socket, :suggestions, Map.put(socket.assigns.suggestions, key, values))}
+  end
+
+  def handle_event("combobox_pick", %{"field" => field, "value" => value}, socket) do
+    # Replace the matching filter with the picked value, clear the suggestion
+    # list for that field so the dropdown closes, and patch the URL so the
+    # query reloads.
+    query =
+      socket
+      |> build_query_from_filters()
+      |> Map.put(field, value)
+      |> drop_empty()
+
+    suggestions =
+      Map.put(socket.assigns.suggestions, suggestion_key(field), [])
+
+    {:noreply,
+     socket
+     |> assign(:suggestions, suggestions)
+     |> push_patch(to: jobs_path(socket, query))}
   end
 
   # ----- events: single-job actions -----
@@ -482,9 +520,11 @@ defmodule ObanUI.Web.JobsLive do
   defp build_query(params) do
     params
     |> Map.take(~w(state queue worker tags node priority q from to))
-    |> Enum.reject(fn {_k, v} -> v in [nil, "", []] end)
     |> Map.new()
   end
+
+  defp drop_empty(map),
+    do: Enum.reject(map, fn {_k, v} -> v in [nil, "", []] end) |> Map.new()
 
   defp build_query_from_filters(socket) do
     Enum.into(socket.assigns.filters, %{}, fn
@@ -526,6 +566,12 @@ defmodule ObanUI.Web.JobsLive do
   end
 
   defp pubsub, do: ObanUI.Config.fetch!().pubsub
+
+  defp suggestion_key("worker"), do: :worker
+  defp suggestion_key("queue"), do: :queue
+  defp suggestion_key("tags"), do: :tags
+  defp suggestion_key("node"), do: :nodes
+  defp suggestion_key(_), do: :__unknown__
 
   # 60-char single-line truncation of the args payload after running it through
   # the host resolver's format_job_args/1. Strings are shown verbatim (after
@@ -588,41 +634,34 @@ defmodule ObanUI.Web.JobsLive do
 
       <.state_tabs counts={@counts} active={@filters[:states] || []} />
 
-      <form phx-change="filter" class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-2 mb-4">
-        <input
-          name="worker"
-          class="oban-ui-input"
-          placeholder="worker"
+      <form
+        phx-change="filter"
+        phx-submit="filter"
+        class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-2 mb-4"
+      >
+        <Combobox.render
+          field="worker"
           value={join_list(@filters[:workers])}
-          list="oban-ui-suggest-worker"
-          phx-debounce="300"
-          phx-keyup="suggest"
-          phx-value-field="worker"
-          phx-value-value=""
+          placeholder="worker"
+          suggestions={@suggestions.worker}
         />
-        <input
-          name="queue"
-          class="oban-ui-input"
-          placeholder="queue"
+        <Combobox.render
+          field="queue"
           value={join_list(@filters[:queues])}
-          list="oban-ui-suggest-queue"
-          phx-debounce="300"
+          placeholder="queue"
+          suggestions={@suggestions.queue}
         />
-        <input
-          name="tags"
-          class="oban-ui-input"
-          placeholder="tags (comma)"
+        <Combobox.render
+          field="tags"
           value={join_list(@filters[:tags])}
-          list="oban-ui-suggest-tags"
-          phx-debounce="300"
+          placeholder="tags (comma)"
+          suggestions={@suggestions.tags}
         />
-        <input
-          name="node"
-          class="oban-ui-input"
-          placeholder="node"
+        <Combobox.render
+          field="node"
           value={join_list(@filters[:nodes])}
-          list="oban-ui-suggest-node"
-          phx-debounce="300"
+          placeholder="node"
+          suggestions={@suggestions.nodes}
         />
         <input
           name="priority"
@@ -650,19 +689,6 @@ defmodule ObanUI.Web.JobsLive do
           class="oban-ui-input sm:col-span-2"
           value={format_dt_input(@filters[:inserted_before])}
         />
-
-        <datalist id="oban-ui-suggest-worker">
-          <option :for={v <- @suggestions.worker} value={v} />
-        </datalist>
-        <datalist id="oban-ui-suggest-queue">
-          <option :for={v <- @suggestions.queue} value={v} />
-        </datalist>
-        <datalist id="oban-ui-suggest-tags">
-          <option :for={v <- @suggestions.tags} value={v} />
-        </datalist>
-        <datalist id="oban-ui-suggest-node">
-          <option :for={v <- @suggestions.nodes} value={v} />
-        </datalist>
       </form>
 
       <.bulk_bar :if={MapSet.size(@selected_ids) > 0 or filters_present?(@filters)}

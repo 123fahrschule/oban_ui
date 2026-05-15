@@ -56,90 +56,103 @@ defmodule ObanUI.Web.Components.Timeline do
       |> assign(:min_t, min_t)
       |> assign(:max_t, max_t)
 
+    legend = legend_items(points)
+    assigns = assign(assigns, :legend, legend)
+
     ~H"""
-    <svg
-      viewBox={"0 0 #{@width} #{@height}"}
-      width="100%"
-      height={@height}
-      role="img"
-      aria-label="Job state timeline"
-      class="oban-ui-timeline"
-    >
-      <%!-- Axis line per attempt --%>
-      <line
-        :for={{_attempt, y} <- @lanes_for_attempt}
-        x1={@padding_x}
-        x2={@width - @padding_x}
-        y1={y}
-        y2={y}
-        stroke="currentColor"
-        stroke-opacity="0.15"
-        stroke-width="1"
-      />
-
-      <%!-- Connectors between consecutive events on the same attempt --%>
-      <g :for={attempt <- Map.keys(@lanes_for_attempt)}>
-        <% sorted_points = Enum.filter(@points, &(&1.attempt == attempt)) |> Enum.sort_by(& &1.at, DateTime) %>
+    <div class="oban-ui-timeline">
+      <svg
+        viewBox={"0 0 #{@width} #{@height}"}
+        width="100%"
+        height={@height}
+        role="img"
+        aria-label="Job state timeline"
+      >
+        <%!-- Axis line per attempt --%>
         <line
-          :for={[a, b] <- chunks_of_2(sorted_points)}
-          x1={a.x}
-          x2={b.x}
-          y1={Map.fetch!(@lanes_for_attempt, attempt)}
-          y2={Map.fetch!(@lanes_for_attempt, attempt)}
-          stroke={connector_color(a, b)}
-          stroke-width="2"
+          :for={{_attempt, y} <- @lanes_for_attempt}
+          x1={@padding_x}
+          x2={@width - @padding_x}
+          y1={y}
+          y2={y}
+          stroke="currentColor"
+          stroke-opacity="0.15"
+          stroke-width="1"
         />
-      </g>
 
-      <%!-- Attempt label --%>
-      <text
-        :for={{attempt, y} <- @lanes_for_attempt}
-        x="8"
-        y={y + 4}
-        font-size="11"
-        fill="currentColor"
-        fill-opacity="0.6"
-      >
-        attempt {attempt}
-      </text>
+        <%!-- Connectors between consecutive events on the same attempt --%>
+        <g :for={attempt <- Map.keys(@lanes_for_attempt)}>
+          <% sorted_points = Enum.filter(@points, &(&1.attempt == attempt)) |> Enum.sort_by(& &1.at, DateTime) %>
+          <line
+            :for={[a, b] <- chunks_of_2(sorted_points)}
+            x1={a.x}
+            x2={b.x}
+            y1={Map.fetch!(@lanes_for_attempt, attempt)}
+            y2={Map.fetch!(@lanes_for_attempt, attempt)}
+            stroke={connector_color(a, b)}
+            stroke-width="2"
+          />
+        </g>
 
-      <%!-- Event nodes --%>
-      <g :for={p <- @points}>
-        <circle
-          cx={p.x}
-          cy={Map.fetch!(@lanes_for_attempt, p.attempt)}
-          r="5"
-          fill={event_color(p.kind)}
-        />
-        <title>{event_label(p.kind)} · {Calendar.strftime(p.at, "%Y-%m-%d %H:%M:%S")}</title>
+        <%!-- Attempt label --%>
         <text
-          x={p.x}
-          y={Map.fetch!(@lanes_for_attempt, p.attempt) - 8}
-          font-size="10"
-          text-anchor="middle"
+          :for={{attempt, y} <- @lanes_for_attempt}
+          x="8"
+          y={y + 4}
+          font-size="11"
           fill="currentColor"
-          fill-opacity="0.8"
+          fill-opacity="0.6"
         >
-          {event_label(p.kind)}
+          attempt {attempt}
         </text>
-      </g>
 
-      <%!-- X-axis range labels --%>
-      <text x={@padding_x} y={@height - 4} font-size="10" fill="currentColor" fill-opacity="0.5">
-        {Calendar.strftime(@min_t, "%H:%M:%S")}
-      </text>
-      <text
-        x={@width - @padding_x}
-        y={@height - 4}
-        font-size="10"
-        text-anchor="end"
-        fill="currentColor"
-        fill-opacity="0.5"
-      >
-        {Calendar.strftime(@max_t, "%H:%M:%S")}
-      </text>
-    </svg>
+        <%!--
+          Event dots only — no inline text labels. Two events at the same
+          timestamp (e.g. attempted_at and completed_at on a fast job) used
+          to overlap their labels. Colours come from the legend below;
+          hovering a dot still surfaces the precise event and time.
+        --%>
+        <g :for={p <- @points}>
+          <circle
+            cx={p.x}
+            cy={Map.fetch!(@lanes_for_attempt, p.attempt)}
+            r="5"
+            fill={event_color(p.kind)}
+          />
+          <title>{event_label(p.kind)} · {Calendar.strftime(p.at, "%Y-%m-%d %H:%M:%S")}</title>
+        </g>
+
+        <%!-- X-axis range labels --%>
+        <text x={@padding_x} y={@height - 4} font-size="10" fill="currentColor" fill-opacity="0.5">
+          {Calendar.strftime(@min_t, "%H:%M:%S")}
+        </text>
+        <text
+          x={@width - @padding_x}
+          y={@height - 4}
+          font-size="10"
+          text-anchor="end"
+          fill="currentColor"
+          fill-opacity="0.5"
+        >
+          {Calendar.strftime(@max_t, "%H:%M:%S")}
+        </text>
+      </svg>
+
+      <ul class="flex flex-wrap gap-3 text-xs text-slate-600 mt-1" aria-label="Event legend">
+        <li :for={{label, color} <- @legend} class="inline-flex items-center gap-1">
+          <span class="inline-block w-2.5 h-2.5 rounded-full" style={"background: #{color}"} aria-hidden="true"></span>
+          {label}
+        </li>
+      </ul>
+    </div>
     """
+  end
+
+  defp legend_items(points) do
+    points
+    |> Enum.map(& &1.kind)
+    |> Enum.uniq()
+    |> Enum.map(fn kind -> {event_label(kind), event_color(kind)} end)
   end
 
   # ------------- internals -------------

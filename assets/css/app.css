@@ -157,3 +157,16 @@
 .oban-ui-pre {
   @apply rounded-md bg-slate-900 text-slate-100 p-3 text-xs overflow-x-auto font-mono;
 }
+
+/* Combobox dropdown visibility is server-controlled: parent LiveView clears
+ * the suggestions list after a pick / after the form submits, which removes
+ * the <ul> from the DOM. Avoids the focus/blur race that swallows clicks
+ * when CSS-based visibility hides the list before the click commits. */
+
+[data-theme="dark"] .oban-ui-combobox > ul {
+  @apply bg-oban-900 border-oban-700 text-slate-100;
+}
+
+[data-theme="dark"] .oban-ui-combobox-list li:hover {
+  @apply bg-oban-800;
+}
