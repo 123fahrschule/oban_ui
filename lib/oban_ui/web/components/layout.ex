@@ -20,6 +20,7 @@ defmodule ObanUI.Web.Components.Layout do
       <aside class="oban-ui-sidebar">
         <div class="px-2 py-3 mb-4 border-b border-oban-800">
           <p class="text-sm font-semibold tracking-wide">Oban UI</p>
+          <p :if={@active_oban} class="text-xs text-slate-400 font-mono mt-1">{@active_oban}</p>
         </div>
 
         <nav class="flex-1 space-y-1">
@@ -28,24 +29,17 @@ defmodule ObanUI.Web.Components.Layout do
           <.nav_link path={@base_path <> "/queues"} label="Queues" active={@active == :queues} />
           <.nav_link path={@base_path <> "/crons"} label="Crons" active={@active == :crons} />
         </nav>
-
-        <div :if={length(@oban_names) > 1} class="mt-4 pt-3 border-t border-oban-800">
-          <p class="text-xs uppercase text-slate-400 mb-1 px-3">Instance</p>
-          <select
-            class="oban-ui-input bg-oban-800 border-oban-700 text-slate-100 text-xs"
-            phx-change="switch_instance"
-          >
-            <option :for={name <- @oban_names} value={name} selected={name == @active_oban}>
-              {name}
-            </option>
-          </select>
-        </div>
       </aside>
 
       <div class="oban-ui-main">
         <div class="oban-ui-topbar">
-          <div class="text-sm text-slate-500">
-            <span :if={@user_display}>{@user_display.name}</span>
+          <div class="text-sm flex items-center gap-3">
+            <.instance_picker
+              :if={length(@oban_names) > 1}
+              names={@oban_names}
+              active={@active_oban}
+            />
+            <span :if={@user_display} class="text-slate-500">{@user_display.name}</span>
           </div>
           <div class="flex items-center gap-2">
             <.theme_toggle />
@@ -56,6 +50,23 @@ defmodule ObanUI.Web.Components.Layout do
         </main>
       </div>
     </div>
+    """
+  end
+
+  attr :names, :list, required: true
+  attr :active, :atom, required: true
+
+  defp instance_picker(assigns) do
+    ~H"""
+    <label class="flex items-center gap-1 text-xs text-slate-500">
+      Instance
+      <select
+        class="oban-ui-input text-xs h-7 py-0"
+        phx-change="switch_instance"
+      >
+        <option :for={name <- @names} value={name} selected={name == @active}>{name}</option>
+      </select>
+    </label>
     """
   end
 

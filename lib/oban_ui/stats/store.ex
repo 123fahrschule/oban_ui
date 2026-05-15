@@ -55,13 +55,28 @@ defmodule ObanUI.Stats.Store do
   end
 
   @doc """
-  Aggregates throughput per second over the last `seconds`. Returns a list
+  Aggregates throughput per bucket over the last `seconds`. Returns a list
   ordered by bucket ascending, with zero-filled gaps so charts can render
   continuously.
+
+  Pass `queue:` to restrict to a single queue.
   """
-  @spec throughput(atom(), pos_integer()) :: [%{bucket: integer(), success: non_neg_integer(), failure: non_neg_integer(), discard: non_neg_integer()}]
-  def throughput(oban_name, seconds) do
-    rows = rows_since(oban_name, seconds)
+  @spec throughput(atom(), pos_integer(), keyword()) :: [
+          %{
+            bucket: integer(),
+            success: non_neg_integer(),
+            failure: non_neg_integer(),
+            discard: non_neg_integer()
+          }
+        ]
+  def throughput(oban_name, seconds, opts \\ []) do
+    queue = opts[:queue]
+
+    rows =
+      oban_name
+      |> rows_since(seconds)
+      |> filter_queue(queue)
+
     bucket_size = Stats.bucket_seconds()
     now = Stats.current_bucket()
     start = now - seconds + bucket_size
@@ -80,6 +95,9 @@ defmodule ObanUI.Stats.Store do
     |> Map.values()
     |> Enum.sort_by(& &1.bucket)
   end
+
+  defp filter_queue(rows, nil), do: rows
+  defp filter_queue(rows, queue), do: Enum.filter(rows, &(&1.queue == queue))
 
   @doc """
   Computes the rolling success rate over the last `seconds`.

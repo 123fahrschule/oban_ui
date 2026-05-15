@@ -1,7 +1,9 @@
 defmodule ObanUI.Web.CronsLive do
   @moduledoc """
   Read-only cron overview. Lists static cron entries configured in
-  `Oban.Plugins.Cron` plus their last observed execution.
+  `Oban.Plugins.Cron` along with each entry's next scheduled run (computed
+  by `ObanUI.Crons.Parser`) and the most recent observed execution from
+  `oban_jobs`.
   """
 
   use Phoenix.LiveView, layout: false
@@ -11,20 +13,27 @@ defmodule ObanUI.Web.CronsLive do
 
   alias ObanUI.Queries.Crons
 
+  @refresh_ms 30_000
+
   @impl true
   def mount(_params, _session, socket) do
-    crons =
-      try do
-        Crons.list(socket.assigns.active_oban)
-      rescue
-        _ -> []
-      end
+    if connected?(socket) do
+      Process.send_after(self(), :refresh, @refresh_ms)
+    end
 
     {:ok,
      socket
      |> assign(:page_title, "Crons")
-     |> assign(:crons, crons)}
+     |> load()}
   end
+
+  @impl true
+  def handle_info(:refresh, socket) do
+    Process.send_after(self(), :refresh, @refresh_ms)
+    {:noreply, load(socket)}
+  end
+
+  def handle_info(_, socket), do: {:noreply, socket}
 
   @impl true
   def handle_event("switch_instance", %{"value" => name}, socket) do
@@ -32,6 +41,17 @@ defmodule ObanUI.Web.CronsLive do
       nil -> {:noreply, socket}
       atom -> {:noreply, push_navigate(socket, to: "#{socket.assigns.base_path}/i/#{atom}/crons")}
     end
+  end
+
+  defp load(socket) do
+    crons =
+      try do
+        Crons.list(socket.assigns.active_oban)
+      rescue
+        _ -> []
+      end
+
+    assign(socket, :crons, crons)
   end
 
   @impl true
@@ -55,19 +75,46 @@ defmodule ObanUI.Web.CronsLive do
         <thead>
           <tr>
             <th>Expression</th>
+            <th>Description</th>
             <th>Worker</th>
+            <th>Next run</th>
             <th>Last run</th>
           </tr>
         </thead>
         <tbody>
           <tr :for={cron <- @crons}>
             <td class="font-mono">{cron.expression}</td>
+            <td class="text-xs text-slate-500">{cron.description}</td>
             <td class="font-mono text-xs">{cron.worker}</td>
+            <td>
+              <%= if cron.next_run_at do %>
+                <time
+                  datetime={DateTime.to_iso8601(cron.next_run_at)}
+                  title={DateTime.to_iso8601(cron.next_run_at)}
+                >
+                  in {countdown(cron.next_run_at)}
+                </time>
+              <% else %>
+                —
+              <% end %>
+            </td>
             <td><.relative_time datetime={cron.last_run_at} /></td>
           </tr>
         </tbody>
       </table>
     </.shell>
     """
+  end
+
+  defp countdown(%DateTime{} = dt) do
+    diff = DateTime.diff(dt, DateTime.utc_now(), :second)
+
+    cond do
+      diff < 0 -> "now"
+      diff < 60 -> "#{diff}s"
+      diff < 3600 -> "#{div(diff, 60)}m"
+      diff < 86_400 -> "#{div(diff, 3600)}h #{div(rem(diff, 3600), 60)}m"
+      true -> "#{div(diff, 86_400)}d"
+    end
   end
 end

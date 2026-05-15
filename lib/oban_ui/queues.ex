@@ -47,6 +47,22 @@ defmodule ObanUI.Queues do
     end
   end
 
+  @doc """
+  Stops a queue — drains running jobs and shuts the queue down for the
+  remainder of the process's lifetime. Requires the `:pause_queues`
+  capability (we treat stop as an escalation of pause).
+  """
+  @spec stop(actor(), String.t(), keyword()) :: :ok | {:error, term()}
+  def stop(actor, queue, opts \\ []) do
+    with :ok <- check(actor, :pause_queues),
+         oban <- Config.oban!(opts[:oban_name]),
+         queue_atom <- to_atom(queue),
+         {:ok, result} <- safe(fn -> Oban.stop_queue(oban, [queue: queue_atom] ++ scope(opts)) end) do
+      audit(actor, :stop_queue, oban, %{queue: queue, local_only: opts[:local_only] || false})
+      result
+    end
+  end
+
   defp check(%{access: caps}, action) do
     if Map.get(caps, action, false), do: :ok, else: {:error, :forbidden}
   end

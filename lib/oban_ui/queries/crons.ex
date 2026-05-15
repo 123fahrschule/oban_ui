@@ -11,9 +11,11 @@ defmodule ObanUI.Queries.Crons do
   import Ecto.Query
 
   alias ObanUI.Config
+  alias ObanUI.Crons.Parser
 
   @type cron :: %{
           expression: String.t(),
+          description: String.t(),
           worker: String.t(),
           args: term(),
           last_run_at: DateTime.t() | nil,
@@ -30,10 +32,21 @@ defmodule ObanUI.Queries.Crons do
     else
       workers = Enum.map(entries, & &1.worker) |> Enum.uniq()
       last_runs = last_runs_for(workers)
+      now = DateTime.utc_now()
 
       Enum.map(entries, fn entry ->
-        Map.put(entry, :last_run_at, Map.get(last_runs, entry.worker))
+        entry
+        |> Map.put(:last_run_at, Map.get(last_runs, entry.worker))
+        |> Map.put(:description, Parser.describe(entry.expression))
+        |> Map.put(:next_run_at, compute_next_run(entry.expression, now))
       end)
+    end
+  end
+
+  defp compute_next_run(expression, now) do
+    case Parser.parse(expression) do
+      {:ok, spec} -> Parser.next_run_at(spec, now)
+      _ -> nil
     end
   end
 
