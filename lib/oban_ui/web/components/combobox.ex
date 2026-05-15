@@ -33,6 +33,13 @@ defmodule ObanUI.Web.Components.Combobox do
 
   use Phoenix.Component
 
+  # NOTE: the click attribute is `phx-value-pick`, not `phx-value-value`.
+  # Phoenix LiveView's JS unconditionally writes `meta.value = el.value` for
+  # any clicked element after copying phx-value-* attrs, so `phx-value-value`
+  # would be clobbered by `HTMLLIElement.value` (0 for an <li> in a <ul>,
+  # but browsers may report the sibling index instead). Using a non-`value`
+  # name sidesteps the override entirely.
+
   attr :field, :string, required: true
   attr :value, :string, default: ""
   attr :placeholder, :string, default: ""
@@ -66,7 +73,7 @@ defmodule ObanUI.Web.Components.Combobox do
           tabindex="-1"
           phx-click="combobox_pick"
           phx-value-field={@field}
-          phx-value-value={s}
+          phx-value-pick={s}
           class="px-3 py-1.5 cursor-pointer hover:bg-oban-50 font-mono text-xs"
         >
           {s}

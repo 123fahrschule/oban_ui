@@ -293,10 +293,11 @@ defmodule ObanUI.Web.JobsLive do
     {:noreply, push_patch(socket, to: jobs_path(socket, query))}
   end
 
-  def handle_event("combobox_pick", %{"field" => field, "value" => value}, socket) do
+  def handle_event("combobox_pick", %{"field" => field, "pick" => value}, socket) do
     # Replace the matching filter with the picked value, clear the suggestion
     # list for that field so the dropdown closes, and patch the URL so the
-    # query reloads.
+    # query reloads. See Combobox docs for why the attribute is "pick",
+    # not "value".
     query =
       socket
       |> build_query_from_filters()

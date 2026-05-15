@@ -141,14 +141,15 @@ defmodule ObanUI.Web.JobsLiveTest do
       "to" => ""
     })
 
-    # Click a suggestion.
-    render_click(view, "combobox_pick", %{
-      "field" => "worker",
-      "value" => "Acme.Workers.FlakyWorker"
-    })
+    # Click the rendered suggestion element. `element/2` extracts the
+    # phx-click handler and phx-value-* attrs from the actual DOM, which is
+    # what catches the JS-side "phx-value-value gets clobbered by el.value"
+    # bug — a hand-crafted payload via render_click/3 wouldn't.
+    view
+    |> element(~s|li[phx-value-pick="Acme.Workers.FlakyWorker"]|)
+    |> render_click()
 
-    # URL now uses the full module name. URI.encode_query escapes dots as
-    # %2E, so we check by inspecting the patched URL via push_patch_to.
+    # URL now uses the full module name (URI.encode_www_form escapes dots).
     assert_patched(view, "/oban/jobs?worker=" <> URI.encode_www_form("Acme.Workers.FlakyWorker"))
 
     # Dropdown is gone.
