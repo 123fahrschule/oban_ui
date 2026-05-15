@@ -27,12 +27,19 @@ defmodule ObanUI.Queries.Jobs do
           optional(:workers) => [String.t()] | nil,
           optional(:tags) => [String.t()] | nil,
           optional(:priorities) => [non_neg_integer()] | nil,
+          optional(:nodes) => [String.t()] | nil,
           optional(:search) => String.t() | nil,
           optional(:inserted_after) => DateTime.t() | nil,
-          optional(:inserted_before) => DateTime.t() | nil
+          optional(:inserted_before) => DateTime.t() | nil,
+          optional(:ids) => [integer()] | nil
         }
 
+  @sortable_fields ~w(id worker queue state priority inserted_at scheduled_at attempted_at completed_at)a
   @type sort :: {atom(), :asc | :desc}
+
+  @doc "Returns the list of fields that may be passed in a sort directive."
+  @spec sortable_fields() :: [atom()]
+  def sortable_fields, do: @sortable_fields
 
   @default_page_size 25
   @max_page_size 200
@@ -163,6 +170,12 @@ defmodule ObanUI.Queries.Jobs do
   defp apply_filter({:priorities, [_ | _] = ps}, q),
     do: from(j in q, where: j.priority in ^ps)
 
+  defp apply_filter({:nodes, [_ | _] = nodes}, q),
+    do: from(j in q, where: fragment("? && ?", j.attempted_by, ^nodes))
+
+  defp apply_filter({:ids, [_ | _] = ids}, q),
+    do: from(j in q, where: j.id in ^ids)
+
   defp apply_filter({:inserted_after, %DateTime{} = ts}, q),
     do: from(j in q, where: j.inserted_at >= ^ts)
 
@@ -201,7 +214,11 @@ defmodule ObanUI.Queries.Jobs do
   defp escape_like(s),
     do: String.replace(s, ~w(% _), fn ch -> "\\" <> ch end)
 
-  defp default_sort(filters) do
+  @doc """
+  Picks a sensible default sort based on the active state filter.
+  """
+  @spec default_sort(filter()) :: sort()
+  def default_sort(filters) do
     cond do
       "executing" in (filters[:states] || []) -> {:attempted_at, :desc}
       "scheduled" in (filters[:states] || []) -> {:scheduled_at, :asc}

@@ -35,13 +35,15 @@ defmodule ObanUI.Web.JobsLiveTest do
     assert html =~ Integer.to_string(j.id)
   end
 
-  test "filter dropdown values are reflected in the URL", %{conn: conn} do
+  test "state filter is reflected in the URL and highlights the active tab", %{conn: conn} do
     insert!(%{state: "available"})
     insert!(%{state: "completed"})
 
     conn = Phoenix.ConnTest.build_conn()
     {:ok, view, _html} = live(conn, "/oban/jobs?state=available")
 
-    assert render(view) =~ ~r/<option[^>]*value="available"[^>]*selected/
+    html = render(view)
+    # Active state-tab has the ring style and the matching phx-value-state.
+    assert html =~ ~r/phx-value-state="available"[^>]*ring-2 ring-oban-500/
   end
 end
