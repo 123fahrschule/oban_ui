@@ -14,12 +14,16 @@ defmodule ObanUI.DevApp.Router do
     plug :put_secure_browser_headers
   end
 
+  @oban_names if System.get_env("OBAN_UI_MULTI") in ~w(1 true yes),
+                do: [Oban, ObanUI.DevApp.SecondaryOban],
+                else: [Oban]
+
   scope "/" do
     pipe_through :browser
 
     get "/", ObanUI.DevApp.HomeController, :index
 
-    oban_ui_dashboard "/oban", oban_names: [Oban]
+    oban_ui_dashboard "/oban", oban_names: @oban_names
   end
 end
 

@@ -31,7 +31,7 @@ defmodule ObanUI.Web.JobsLive do
   alias ObanUI.Jobs.Edit
   alias ObanUI.Queries.Jobs, as: JobsQuery
   alias ObanUI.Queries.Suggestions
-  alias ObanUI.Web.Components.Timeline
+  alias ObanUI.Web.Components.{EmptyState, Timeline}
 
   @page_size 25
 
@@ -48,6 +48,7 @@ defmodule ObanUI.Web.JobsLive do
       |> assign(:filters, %{})
       |> assign(:sort, nil)
       |> assign(:next_cursor, nil)
+      |> assign(:job_count, 0)
       |> assign(:selected_job, nil)
       |> assign(:selected_ids, MapSet.new())
       |> assign(:bulk_state, nil)
@@ -175,6 +176,7 @@ defmodule ObanUI.Web.JobsLive do
     |> stream(:jobs, jobs, reset: true)
     |> assign(:counts, counts)
     |> assign(:next_cursor, next)
+    |> assign(:job_count, length(jobs))
   end
 
   defp maybe_load_detail(%{assigns: %{live_action: :show}} = socket, %{"id" => id}) do
@@ -643,7 +645,18 @@ defmodule ObanUI.Web.JobsLive do
 
       <.bulk_panel :if={@bulk_state} state={@bulk_state} />
 
-      <table class="oban-ui-table" role="table" aria-label="Jobs">
+      <EmptyState.render :if={@job_count == 0} title="No jobs match the current filters." class="mb-4">
+        <p :if={filters_present?(@filters)}>
+          Try
+          <button type="button" phx-click="clear_filters" class="underline">clearing filters</button>
+          to see all jobs.
+        </p>
+        <p :if={not filters_present?(@filters)}>
+          Once your app inserts jobs they will appear here within a second.
+        </p>
+      </EmptyState.render>
+
+      <table :if={@job_count > 0} class="oban-ui-table" role="table" aria-label="Jobs">
         <caption class="sr-only">List of Oban jobs matching the current filters</caption>
         <thead>
           <tr>

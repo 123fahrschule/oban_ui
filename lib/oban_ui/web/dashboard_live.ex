@@ -22,7 +22,7 @@ defmodule ObanUI.Web.DashboardLive do
 
   alias ObanUI.{Notifier, Stats}
   alias ObanUI.Queries.Jobs, as: JobsQuery
-  alias ObanUI.Web.Components.Chart
+  alias ObanUI.Web.Components.{Chart, EmptyState}
 
   @refresh_ms 5_000
   @ranges %{
@@ -190,9 +190,11 @@ defmodule ObanUI.Web.DashboardLive do
         <.card class="lg:col-span-2">
           <p class="text-sm font-medium mb-2">Throughput · {@range}</p>
           <Chart.render :if={@chart_series != []} series={@chart_series} labels={@chart_labels} stacked={true} />
-          <p :if={@chart_series == []} class="text-xs text-slate-500">
-            No data yet — jobs need to run for stats to populate.
-          </p>
+          <EmptyState.render :if={@chart_series == []} title="No throughput data yet.">
+            Charts populate once jobs complete or fail. If you have just enabled
+            persistence, restart your app — the dashboard will hydrate from
+            <code class="font-mono">oban_ui_metrics</code>.
+          </EmptyState.render>
         </.card>
 
         <.card>

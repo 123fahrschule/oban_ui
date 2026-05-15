@@ -8625,10 +8625,16 @@ removing illegal node: "${(childNode.outerHTML || childNode.nodeValue).trim()}"
       params: { _csrf_token: token },
       hooks: Hooks2
     });
+    liveSocket.socket.onError(() => markDisconnected(true));
+    liveSocket.socket.onClose(() => markDisconnected(true));
+    liveSocket.socket.onOpen(() => markDisconnected(false));
     liveSocket.connect();
     window.ObanUI = window.ObanUI || {};
     window.ObanUI.liveSocket = liveSocket;
     window.ObanUI.Hooks = Hooks2;
+  }
+  function markDisconnected(yes) {
+    document.documentElement.classList.toggle("phx-disconnected", yes);
   }
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", start);

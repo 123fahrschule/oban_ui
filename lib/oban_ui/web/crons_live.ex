@@ -12,6 +12,7 @@ defmodule ObanUI.Web.CronsLive do
   import ObanUI.Web.Components.Layout, only: [shell: 1]
 
   alias ObanUI.Queries.Crons
+  alias ObanUI.Web.Components.EmptyState
 
   @refresh_ms 30_000
 
@@ -66,10 +67,11 @@ defmodule ObanUI.Web.CronsLive do
     >
       <.page_header title="Crons" />
 
-      <p :if={@crons == []} class="text-sm text-slate-500">
-        No cron entries configured. Add `Oban.Plugins.Cron` with a `:crontab` list
-        to your Oban supervisor to see them here.
-      </p>
+      <EmptyState.render :if={@crons == []} title="No cron entries configured.">
+        Add <code class="font-mono">Oban.Plugins.Cron</code> with a
+        <code class="font-mono">:crontab</code> list to your Oban supervisor and they
+        will show up here on the next refresh.
+      </EmptyState.render>
 
       <table :if={@crons != []} class="oban-ui-table">
         <thead>

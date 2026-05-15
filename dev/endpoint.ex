@@ -1,3 +1,10 @@
+defmodule ObanUI.DevApp.ErrorView do
+  @moduledoc false
+  def render("404.html", _), do: "Not found"
+  def render("500.html", _), do: "Server error"
+  def render(_, _), do: "Error"
+end
+
 defmodule ObanUI.DevApp.Endpoint do
   use Phoenix.Endpoint, otp_app: :oban_ui
 

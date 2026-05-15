@@ -15,7 +15,11 @@ config :oban_ui, ObanUI.DevApp.Endpoint,
   secret_key_base: String.duplicate("a", 64),
   live_view: [signing_salt: "oban-ui-test"],
   pubsub_server: ObanUI.DevApp.PubSub,
+  render_errors: [formats: [html: ObanUI.DevApp.ErrorView], layout: false],
   server: false
+
+# Surface real errors during tests instead of swallowing them in render_errors.
+config :phoenix, :stacktrace_depth, 20
 
 config :logger, level: :warning
 config :phoenix, :plug_init_mode, :runtime

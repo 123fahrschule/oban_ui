@@ -262,13 +262,22 @@ function start() {
     hooks: Hooks
   });
 
-  // Mark <html> with phx-loading / phx-disconnected so the banner in the
-  // root layout can react via CSS variants.
+  // LiveView's built-in phx-disconnected class lives on individual LV roots,
+  // not on <html>. To drive the page-level connectivity banner we toggle the
+  // same class on <html> ourselves based on raw socket lifecycle events.
+  liveSocket.socket.onError(() => markDisconnected(true));
+  liveSocket.socket.onClose(() => markDisconnected(true));
+  liveSocket.socket.onOpen(() => markDisconnected(false));
+
   liveSocket.connect();
 
   window.ObanUI = window.ObanUI || {};
   window.ObanUI.liveSocket = liveSocket;
   window.ObanUI.Hooks = Hooks;
+}
+
+function markDisconnected(yes) {
+  document.documentElement.classList.toggle("phx-disconnected", yes);
 }
 
 if (document.readyState === "loading") {

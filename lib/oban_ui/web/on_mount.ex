@@ -14,7 +14,10 @@ defmodule ObanUI.Web.OnMount do
   def on_mount(:default, params, session, socket) do
     opts = session["oban_ui_opts"] || %{}
     resolver = opts[:resolver] || Resolver.Default
-    oban_names = opts[:oban_names] || [Oban]
+    # Prefer the explicitly mounted list; fall back to whatever the
+    # supervisor knows about so hosts that only configure :oban_names in
+    # one place still get a working picker.
+    oban_names = opts[:oban_names] || runtime_oban_names() || [Oban]
     base_path = opts[:base_path] || "/oban"
 
     user =
@@ -83,5 +86,11 @@ defmodule ObanUI.Web.OnMount do
     rescue
       ArgumentError -> :__unknown__
     end
+  end
+
+  defp runtime_oban_names do
+    ObanUI.Config.fetch!().oban_names
+  rescue
+    _ -> nil
   end
 end

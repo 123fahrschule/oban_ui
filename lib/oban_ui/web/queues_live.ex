@@ -22,6 +22,7 @@ defmodule ObanUI.Web.QueuesLive do
 
   alias ObanUI.{Notifier, Queues, Stats}
   alias ObanUI.Queries.Queues, as: QueuesQuery
+  alias ObanUI.Web.Components.EmptyState
 
   @refresh_ms 3_000
 
@@ -217,11 +218,12 @@ defmodule ObanUI.Web.QueuesLive do
 
     <.flash_bar flash={@flash} />
 
-    <p :if={@summaries == []} class="text-sm text-slate-500">
-      No queues configured.
-    </p>
+    <EmptyState.render :if={@summaries == []} title="No queues yet." class="mb-4">
+      Configure queues in your Oban supervisor child spec, e.g.
+      <code class="font-mono">queues: [default: 10, mailers: 2]</code>.
+    </EmptyState.render>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+    <div :if={@summaries != []} class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
       <.card :for={q <- @summaries}>
         <header class="flex items-start justify-between">
           <div>

@@ -44,21 +44,53 @@ ObanUI.DevApp.Migrator.run!()
 # Phase 2 — stop the temporary repo supervisor; the main one will own it.
 Supervisor.stop(repo_sup)
 
-children = [
-  {Phoenix.PubSub, name: ObanUI.DevApp.PubSub},
-  ObanUI.DevApp.Repo,
-  {Oban,
-   repo: ObanUI.DevApp.Repo,
-   queues: [default: 5, mailers: 2, media: 1],
-   plugins: [
-     {Oban.Plugins.Cron,
-      crontab: [
-        {"@daily", ObanUI.DevApp.NoopWorker}
-      ]}
-   ]},
-  {ObanUI, oban_names: [Oban], pubsub: ObanUI.DevApp.PubSub, repo: ObanUI.DevApp.Repo},
-  ObanUI.DevApp.Endpoint
-]
+multi_instance? = System.get_env("OBAN_UI_MULTI") in ~w(1 true yes)
+
+oban_children =
+  if multi_instance? do
+    [
+      {Oban,
+       name: Oban,
+       repo: ObanUI.DevApp.Repo,
+       queues: [default: 5, mailers: 2, media: 1],
+       plugins: [
+         {Oban.Plugins.Cron,
+          crontab: [
+            {"@daily", ObanUI.DevApp.NoopWorker}
+          ]}
+       ]},
+      # Second instance shares the same DB and oban_jobs table — Oban
+       # disambiguates rows by their queue list. Use this to exercise the
+       # multi-instance picker without a second migration.
+       {Oban,
+       name: ObanUI.DevApp.SecondaryOban,
+       repo: ObanUI.DevApp.Repo,
+       queues: [reports: 2, exports: 1]}
+    ]
+  else
+    [
+      {Oban,
+       repo: ObanUI.DevApp.Repo,
+       queues: [default: 5, mailers: 2, media: 1],
+       plugins: [
+         {Oban.Plugins.Cron,
+          crontab: [
+            {"@daily", ObanUI.DevApp.NoopWorker}
+          ]}
+       ]}
+    ]
+  end
+
+oban_names = if multi_instance?, do: [Oban, ObanUI.DevApp.SecondaryOban], else: [Oban]
+
+children =
+  [{Phoenix.PubSub, name: ObanUI.DevApp.PubSub}, ObanUI.DevApp.Repo] ++
+    oban_children ++
+    [
+      {ObanUI,
+       oban_names: oban_names, pubsub: ObanUI.DevApp.PubSub, repo: ObanUI.DevApp.Repo},
+      ObanUI.DevApp.Endpoint
+    ]
 
 {:ok, _sup} = Supervisor.start_link(children, strategy: :one_for_one, name: ObanUI.DevApp.Supervisor)
 
