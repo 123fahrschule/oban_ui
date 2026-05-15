@@ -89,9 +89,14 @@ defmodule ObanUI.Queries.Suggestions do
     _ -> []
   end
 
+  # Substring match — the corresponding filter queries also use ILIKE
+  # '%value%', so "Flaky" finds "MyApp.Workers.FlakyWorker". Keeping the
+  # suggestion semantics aligned with the filter avoids the surprising
+  # case where the dropdown is empty even though the eventual query would
+  # have matched.
   defp like_pattern(nil), do: "%"
   defp like_pattern(""), do: "%"
 
-  defp like_pattern(prefix),
-    do: prefix |> String.replace(~w(% _), &("\\" <> &1)) |> Kernel.<>("%")
+  defp like_pattern(needle),
+    do: "%" <> String.replace(needle, ~w(% _), &("\\" <> &1)) <> "%"
 end

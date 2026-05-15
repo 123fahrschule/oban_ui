@@ -64,4 +64,117 @@ defmodule ObanUI.Web.JobsLiveTest do
     assert_patched(view, "/oban/jobs")
     refute render(view) =~ "No jobs match"
   end
+
+  test "typing in the worker combobox populates suggestions and applies the filter", %{conn: conn} do
+    insert!(%{worker: "MyApp.Workers.FlakyWorker", state: "available"})
+    insert!(%{worker: "MyApp.Workers.NoopWorker", state: "available"})
+
+    {:ok, view, _} = live(conn, "/oban/jobs")
+
+    # The form's phx-change fires with the full form payload + a _target
+    # path identifying which input changed. The combobox itself just sets
+    # the value; the form aggregates it.
+    render_change(view, "filter", %{
+      "_target" => ["worker"],
+      "worker" => "Flaky",
+      "queue" => "",
+      "tags" => "",
+      "node" => "",
+      "priority" => "",
+      "q" => "",
+      "from" => "",
+      "to" => ""
+    })
+
+    html = render(view)
+
+    # 1. The URL gets the worker filter (URI.encode_query preserves dots, only special chars are encoded)
+    assert_patched(view, "/oban/jobs?worker=Flaky")
+
+    # 2. The result set is restricted to FlakyWorker (NoopWorker gone)
+    assert html =~ "FlakyWorker"
+    refute html =~ "NoopWorker"
+
+    # 3. A suggestion dropdown appears with the full module name
+    assert html =~ "MyApp.Workers.FlakyWorker"
+    assert html =~ ~r/role="listbox"/
+  end
+
+  test "clearing a worker value via filter drops it from the URL", %{conn: conn} do
+    insert!(%{worker: "X.Worker", state: "available"})
+
+    # Start with a worker filter in the URL.
+    {:ok, view, _} = live(conn, "/oban/jobs?worker=Flaky")
+
+    # User clears the input and the form change fires with worker="".
+    render_change(view, "filter", %{
+      "_target" => ["worker"],
+      "worker" => "",
+      "queue" => "",
+      "tags" => "",
+      "node" => "",
+      "priority" => "",
+      "q" => "",
+      "from" => "",
+      "to" => ""
+    })
+
+    # The patched URL no longer carries `worker`.
+    assert_patched(view, "/oban/jobs")
+  end
+
+  test "combobox_pick replaces the worker value and closes the dropdown", %{conn: conn} do
+    insert!(%{worker: "Acme.Workers.FlakyWorker", state: "available"})
+
+    {:ok, view, _} = live(conn, "/oban/jobs")
+
+    # Pre-seed a suggestion list by firing a filter change first.
+    render_change(view, "filter", %{
+      "_target" => ["worker"],
+      "worker" => "Flaky",
+      "queue" => "",
+      "tags" => "",
+      "node" => "",
+      "priority" => "",
+      "q" => "",
+      "from" => "",
+      "to" => ""
+    })
+
+    # Click a suggestion.
+    render_click(view, "combobox_pick", %{
+      "field" => "worker",
+      "value" => "Acme.Workers.FlakyWorker"
+    })
+
+    # URL now uses the full module name. URI.encode_query escapes dots as
+    # %2E, so we check by inspecting the patched URL via push_patch_to.
+    assert_patched(view, "/oban/jobs?worker=" <> URI.encode_www_form("Acme.Workers.FlakyWorker"))
+
+    # Dropdown is gone.
+    html = render(view)
+    refute html =~ ~r/role="listbox"/
+  end
+
+  test "state-tab toggle is preserved across form changes", %{conn: conn} do
+    insert!(%{state: "discarded", worker: "X.Worker"})
+    insert!(%{state: "completed", worker: "X.Worker"})
+
+    {:ok, view, _} = live(conn, "/oban/jobs?state=discarded")
+
+    # Fire a form change with no worker value — the state filter must survive.
+    render_change(view, "filter", %{
+      "_target" => ["worker"],
+      "worker" => "",
+      "queue" => "",
+      "tags" => "",
+      "node" => "",
+      "priority" => "",
+      "q" => "",
+      "from" => "",
+      "to" => ""
+    })
+
+    assert_patched(view, "/oban/jobs?state=discarded")
+  end
 end

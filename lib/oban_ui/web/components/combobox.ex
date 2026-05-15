@@ -49,9 +49,7 @@ defmodule ObanUI.Web.Components.Combobox do
         class="oban-ui-input"
         autocomplete="off"
         spellcheck="false"
-        phx-keyup="suggest"
-        phx-value-field={@field}
-        phx-debounce="200"
+        phx-debounce="250"
         aria-autocomplete="list"
         aria-expanded={@suggestions != [] && "true" || "false"}
         aria-controls={"combobox-list-" <> @field}

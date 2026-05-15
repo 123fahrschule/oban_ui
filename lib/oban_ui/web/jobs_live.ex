@@ -243,9 +243,16 @@ defmodule ObanUI.Web.JobsLive do
       |> Map.merge(build_query(params))
       |> drop_empty()
 
+    # Refresh suggestions for the text fields that triggered the change.
+    # phx-change carries the entire form payload, including a "_target" key
+    # naming the input that fired the event — only that field's dropdown
+    # should pop, so we don't clutter the page with three more.
+    target = List.last(params["_target"] || [])
+    suggestions = recompute_suggestions(socket.assigns.suggestions, target, params)
+
     {:noreply,
      socket
-     |> assign(:suggestions, %{worker: [], queue: [], tags: [], nodes: []})
+     |> assign(:suggestions, suggestions)
      |> push_patch(to: jobs_path(socket, query))}
   end
 
@@ -284,29 +291,6 @@ defmodule ObanUI.Web.JobsLive do
       |> put_sort_query(sort)
 
     {:noreply, push_patch(socket, to: jobs_path(socket, query))}
-  end
-
-  def handle_event("suggest", %{"field" => field} = params, socket) do
-    # phx-keyup sends the current input value as `value`; older Phoenix versions
-    # used the `_target`/payload shape. Accept either.
-    typed = params["value"] || get_in(params, [field]) || ""
-    key = suggestion_key(field)
-
-    values =
-      case key do
-        :worker -> Suggestions.workers(typed)
-        :queue -> Suggestions.queues(typed)
-        :tags -> Suggestions.tags(typed)
-        :nodes -> Suggestions.nodes(typed)
-        _ -> []
-      end
-
-    # Hide the dropdown automatically when the input is empty so the page
-    # doesn't show a stale list.
-    values = if typed == "", do: [], else: values
-
-    {:noreply,
-     assign(socket, :suggestions, Map.put(socket.assigns.suggestions, key, values))}
   end
 
   def handle_event("combobox_pick", %{"field" => field, "value" => value}, socket) do
@@ -572,6 +556,32 @@ defmodule ObanUI.Web.JobsLive do
   defp suggestion_key("tags"), do: :tags
   defp suggestion_key("node"), do: :nodes
   defp suggestion_key(_), do: :__unknown__
+
+  # Only one combobox at a time should be open. We rebuild the suggestions
+  # map clearing every field except the one that fired the change — and even
+  # for that one we only query if the user has typed something. An empty
+  # value collapses the dropdown.
+  defp recompute_suggestions(_old, target, params)
+       when target in ~w(worker queue tags node) do
+    typed = params[target] || ""
+    key = suggestion_key(target)
+
+    values =
+      cond do
+        typed == "" -> []
+        key == :worker -> Suggestions.workers(typed)
+        key == :queue -> Suggestions.queues(typed)
+        key == :tags -> Suggestions.tags(typed)
+        key == :nodes -> Suggestions.nodes(typed)
+        true -> []
+      end
+
+    %{worker: [], queue: [], tags: [], nodes: []}
+    |> Map.put(key, values)
+  end
+
+  defp recompute_suggestions(_old, _other_target, _params),
+    do: %{worker: [], queue: [], tags: [], nodes: []}
 
   # 60-char single-line truncation of the args payload after running it through
   # the host resolver's format_job_args/1. Strings are shown verbatim (after
