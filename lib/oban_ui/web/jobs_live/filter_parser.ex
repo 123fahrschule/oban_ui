@@ -126,8 +126,9 @@ defmodule ObanUI.Web.JobsLive.FilterParser do
     |> maybe_put(:inserted_before, datetime(params["to"]))
   end
 
+  # `split/1` and `int_list/1` already collapse empty results to nil so we
+  # only ever see nil or a populated value here.
   defp maybe_put(map, _key, nil), do: map
-  defp maybe_put(map, _key, []), do: map
   defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
   defp safe_field_atom(name) do

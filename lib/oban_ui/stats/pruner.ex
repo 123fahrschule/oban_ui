@@ -117,8 +117,7 @@ defmodule ObanUI.Stats.Pruner do
   end
 
   defp persisted? do
-    config = Config.fetch!()
-    Map.get(config.stats || %{}, :persist, false)
+    Map.get(Config.fetch!().stats, :persist, false)
   rescue
     _ -> false
   end

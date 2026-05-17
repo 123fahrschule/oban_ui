@@ -156,17 +156,18 @@ defmodule ObanUI.Jobs.Bulk do
   defp capability_for(:delete), do: :delete_jobs
 
   defp bulk_queue(oban_name) do
-    case Oban.config(oban_name) do
-      %{queues: queues} ->
-        cond do
-          Keyword.has_key?(queues, :oban_ui_bulk) -> :oban_ui_bulk
-          Keyword.has_key?(queues, :default) -> :default
-          true -> queues |> Keyword.keys() |> List.first() || :default
-        end
+    # Oban.config/1 always returns a struct with :queues, but we wrap in
+    # rescue so a misconfigured / not-yet-started instance falls back to
+    # `:default` rather than crashing the bulk dispatch.
+    %{queues: queues} = Oban.config(oban_name)
 
-      _ ->
-        :default
+    cond do
+      Keyword.has_key?(queues, :oban_ui_bulk) -> :oban_ui_bulk
+      Keyword.has_key?(queues, :default) -> :default
+      true -> queues |> Keyword.keys() |> List.first() || :default
     end
+  rescue
+    _ -> :default
   end
 
   defp serialise_filters(filters) do

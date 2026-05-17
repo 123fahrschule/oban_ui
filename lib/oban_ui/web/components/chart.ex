@@ -200,7 +200,9 @@ defmodule ObanUI.Web.Components.Chart do
     Enum.at(labels, div(length(labels), 2)) || ""
   end
 
-  defp round_short(n) when is_float(n), do: Float.round(n, 0) |> trunc() |> Integer.to_string()
-  defp round_short(n) when is_integer(n), do: Integer.to_string(n)
-  defp round_short(n), do: inspect(n)
+  # The caller always passes a float (computed via `/` from integers), so
+  # we only need to handle that case. Other types would be a bug, not a
+  # display problem.
+  defp round_short(n) when is_float(n),
+    do: n |> Float.round(0) |> trunc() |> Integer.to_string()
 end
