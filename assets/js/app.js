@@ -100,6 +100,18 @@ const ConfirmAction = {
   }
 };
 
+// indeterminate is a JS-only property — there's no HTML attribute for it. We
+// drive it from data-state="some" on the checkbox, server-rendered by the
+// LiveView. The server still controls the canonical checked state via the
+// `checked` attribute; we only set the visual tri-state here.
+const Indeterminate = {
+  mounted() { this.apply(); },
+  updated() { this.apply(); },
+  apply() {
+    this.el.indeterminate = this.el.dataset.state === "some";
+  }
+};
+
 // ---------------------------------------------------------------------------
 // Focus-trap for the job detail drawer.
 //
@@ -236,7 +248,8 @@ const Hooks = {
   Sparkline,
   ConfirmAction,
   DrawerFocusTrap,
-  KeyboardShortcuts
+  KeyboardShortcuts,
+  Indeterminate
 };
 
 // ---------------------------------------------------------------------------

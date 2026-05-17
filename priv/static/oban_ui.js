@@ -8502,6 +8502,17 @@ removing illegal node: "${(childNode.outerHTML || childNode.nodeValue).trim()}"
       });
     }
   };
+  var Indeterminate = {
+    mounted() {
+      this.apply();
+    },
+    updated() {
+      this.apply();
+    },
+    apply() {
+      this.el.indeterminate = this.el.dataset.state === "some";
+    }
+  };
   var FOCUSABLE = "a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])";
   var DrawerFocusTrap = {
     mounted() {
@@ -8607,7 +8618,8 @@ removing illegal node: "${(childNode.outerHTML || childNode.nodeValue).trim()}"
     Sparkline,
     ConfirmAction,
     DrawerFocusTrap,
-    KeyboardShortcuts
+    KeyboardShortcuts,
+    Indeterminate
   };
   function csrfToken() {
     const meta = document.querySelector("meta[name='csrf-token']");

@@ -157,6 +157,60 @@ defmodule ObanUI.Web.JobsLiveTest do
     refute html =~ ~r/role="listbox"/
   end
 
+  test "select-all toggles all visible rows on, then off", %{conn: conn} do
+    for n <- 1..3, do: insert!(%{worker: "W#{n}", state: "available"})
+
+    {:ok, view, _} = live(conn, "/oban/jobs")
+
+    # Initially nothing selected; checkbox state is :none
+    html = render(view)
+    assert html =~ ~r/data-state="none"/
+
+    # Click toggles all visible jobs into the selection.
+    view |> element("#oban-ui-select-all") |> render_click()
+    html_after = render(view)
+    assert html_after =~ ~r/data-state="all"/
+
+    # A second click clears them again.
+    view |> element("#oban-ui-select-all") |> render_click()
+    html_final = render(view)
+    assert html_final =~ ~r/data-state="none"/
+  end
+
+  test "load_more appends a second page and pauses live refresh", %{conn: conn} do
+    # 30 rows so page 1 has 25, page 2 has 5
+    for n <- 1..30, do: insert!(%{worker: "W#{n}", state: "available"})
+
+    {:ok, view, _} = live(conn, "/oban/jobs")
+    html = render(view)
+    rows_p1 = Regex.scan(~r/id="jobs-\d+"/, html) |> length()
+    assert rows_p1 == 25
+
+    # Load-more button is present because there's a next cursor.
+    assert html =~ "Load more"
+
+    view |> element("button", "Load more") |> render_click()
+    html_after = render(view)
+    rows_p2 = Regex.scan(~r/id="jobs-\d+"/, html_after) |> length()
+    assert rows_p2 == 30
+
+    # After load-more there is no further cursor, so the button is gone.
+    refute html_after =~ "Load more"
+
+    # And the page now shows the "live refresh paused" notice.
+    assert html_after =~ "Live refresh paused"
+  end
+
+  test "match count above the table reflects the filter", %{conn: conn} do
+    for _ <- 1..3, do: insert!(%{state: "available"})
+    insert!(%{state: "completed"})
+
+    {:ok, view, _} = live(conn, "/oban/jobs?state=available")
+    html = render(view)
+
+    assert html =~ ~r/<strong>3<\/strong>\s*matching job/
+  end
+
   test "state-tab toggle is preserved across form changes", %{conn: conn} do
     insert!(%{state: "discarded", worker: "X.Worker"})
     insert!(%{state: "completed", worker: "X.Worker"})

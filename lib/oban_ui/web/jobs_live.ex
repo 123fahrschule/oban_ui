@@ -50,6 +50,12 @@ defmodule ObanUI.Web.JobsLive do
       |> assign(:sort, nil)
       |> assign(:next_cursor, nil)
       |> assign(:job_count, 0)
+      |> assign(:visible_ids, [])
+      |> assign(:total_matches, 0)
+      # When the user clicks "load more" we keep appending to the stream
+      # instead of resetting on every tick. We track that mode here so the
+      # live-refresh handler knows to back off.
+      |> assign(:loaded_pages, 1)
       |> assign(:selected_job, nil)
       |> assign(:selected_ids, MapSet.new())
       |> assign(:bulk_state, nil)
@@ -173,11 +179,49 @@ defmodule ObanUI.Web.JobsLive do
         _ -> %{}
       end
 
+    # count_by_state intentionally drops the state filter so the state-tab
+    # counts reflect "what's available regardless of which tab is active".
+    # The visible-match count, however, has to respect ALL filters, so a
+    # second short COUNT(*) query is the honest answer.
+    total =
+      try do
+        JobsQuery.count(socket.assigns.filters)
+      rescue
+        _ -> length(jobs)
+      end
+
     socket
     |> stream(:jobs, jobs, reset: true)
     |> assign(:counts, counts)
     |> assign(:next_cursor, next)
     |> assign(:job_count, length(jobs))
+    |> assign(:visible_ids, Enum.map(jobs, & &1.id))
+    |> assign(:total_matches, total)
+    |> assign(:loaded_pages, 1)
+  end
+
+  # Appends the next cursor page to the existing stream. Called from the
+  # "load_more" handler; never from auto-refresh.
+  defp append_page(socket) do
+    case socket.assigns.next_cursor do
+      nil ->
+        socket
+
+      cursor ->
+        {jobs, %{next_cursor: next}} =
+          JobsQuery.list(socket.assigns.filters,
+            page_size: @page_size,
+            sort: socket.assigns.sort || JobsQuery.default_sort(socket.assigns.filters),
+            cursor: cursor
+          )
+
+        socket
+        |> stream(:jobs, jobs, at: -1)
+        |> assign(:next_cursor, next)
+        |> assign(:job_count, socket.assigns.job_count + length(jobs))
+        |> assign(:visible_ids, socket.assigns.visible_ids ++ Enum.map(jobs, & &1.id))
+        |> assign(:loaded_pages, socket.assigns.loaded_pages + 1)
+    end
   end
 
   defp maybe_load_detail(%{assigns: %{live_action: :show}} = socket, %{"id" => id}) do
@@ -193,11 +237,18 @@ defmodule ObanUI.Web.JobsLive do
 
   @impl true
   def handle_info({:tick, _buffer}, socket) do
-    if socket.assigns[:reload_pending] do
-      {:noreply, socket}
-    else
-      Process.send_after(self(), :reload_now, 200)
-      {:noreply, assign(socket, :reload_pending, true)}
+    cond do
+      socket.assigns[:reload_pending] ->
+        {:noreply, socket}
+
+      socket.assigns.loaded_pages > 1 ->
+        # User is browsing older history via "Load more"; an auto-refresh
+        # would yank them back to page 1. Skip the tick.
+        {:noreply, socket}
+
+      true ->
+        Process.send_after(self(), :reload_now, 200)
+        {:noreply, assign(socket, :reload_pending, true)}
     end
   end
 
@@ -333,6 +384,27 @@ defmodule ObanUI.Web.JobsLive do
       if MapSet.member?(set, id_int),
         do: MapSet.delete(set, id_int),
         else: MapSet.put(set, id_int)
+
+    {:noreply, assign(socket, :selected_ids, next)}
+  end
+
+  def handle_event("load_more", _params, socket) do
+    {:noreply, append_page(socket)}
+  end
+
+  def handle_event("toggle_select_all", _params, socket) do
+    visible = socket.assigns.visible_ids
+    selected = socket.assigns.selected_ids
+
+    all_visible_selected? =
+      visible != [] and Enum.all?(visible, &MapSet.member?(selected, &1))
+
+    next =
+      if all_visible_selected? do
+        Enum.reduce(visible, selected, &MapSet.delete(&2, &1))
+      else
+        Enum.reduce(visible, selected, &MapSet.put(&2, &1))
+      end
 
     {:noreply, assign(socket, :selected_ids, next)}
   end
@@ -552,6 +624,19 @@ defmodule ObanUI.Web.JobsLive do
 
   defp pubsub, do: ObanUI.Config.fetch!().pubsub
 
+  # Returns :none, :some or :all depending on how many of the currently
+  # rendered rows are in the user's selection set. The render layer
+  # uses this to drive the checkbox's `data-state` and the JS hook
+  # turns `data-state="some"` into `el.indeterminate = true`.
+  defp select_all_state(visible, selected) do
+    cond do
+      visible == [] -> :none
+      Enum.all?(visible, &MapSet.member?(selected, &1)) -> :all
+      Enum.any?(visible, &MapSet.member?(selected, &1)) -> :some
+      true -> :none
+    end
+  end
+
   defp suggestion_key("worker"), do: :worker
   defp suggestion_key("queue"), do: :queue
   defp suggestion_key("tags"), do: :tags
@@ -688,19 +773,33 @@ defmodule ObanUI.Web.JobsLive do
           value={@filters[:search]}
           phx-debounce="400"
         />
-        <input
-          name="from"
-          type="datetime-local"
-          class="oban-ui-input sm:col-span-2"
-          value={format_dt_input(@filters[:inserted_after])}
-        />
-        <input
-          name="to"
-          type="datetime-local"
-          class="oban-ui-input sm:col-span-2"
-          value={format_dt_input(@filters[:inserted_before])}
-        />
+        <label class="text-xs text-slate-500 sm:col-span-1 flex items-center gap-1">
+          <span>from</span>
+          <input
+            name="from"
+            type="datetime-local"
+            class="oban-ui-input text-xs py-1"
+            value={format_dt_input(@filters[:inserted_after])}
+          />
+        </label>
+        <label class="text-xs text-slate-500 sm:col-span-1 flex items-center gap-1">
+          <span>to</span>
+          <input
+            name="to"
+            type="datetime-local"
+            class="oban-ui-input text-xs py-1"
+            value={format_dt_input(@filters[:inserted_before])}
+          />
+        </label>
       </form>
+
+      <p class="text-xs text-slate-500 mb-2">
+        Showing
+        <strong>{@job_count}</strong>
+        <span :if={@total_matches > @job_count}>of {@total_matches}</span>
+        matching job<span :if={@total_matches != 1}>s</span>
+        <span :if={filters_present?(@filters)} class="text-slate-400">· filtered</span>
+      </p>
 
       <.bulk_bar :if={MapSet.size(@selected_ids) > 0 or filters_present?(@filters)}
         selected={MapSet.size(@selected_ids)}
@@ -727,10 +826,12 @@ defmodule ObanUI.Web.JobsLive do
             <th class="w-6" scope="col">
               <input
                 type="checkbox"
-                disabled={true}
-                checked={MapSet.size(@selected_ids) > 0}
-                title="Use row checkboxes"
-                aria-label="Select all (use per-row checkboxes)"
+                id="oban-ui-select-all"
+                phx-hook="Indeterminate"
+                phx-click="toggle_select_all"
+                checked={select_all_state(@visible_ids, @selected_ids) == :all}
+                data-state={Atom.to_string(select_all_state(@visible_ids, @selected_ids))}
+                aria-label={"Toggle selection for #{length(@visible_ids)} visible jobs"}
               />
             </th>
             <.sort_th field={:id} label="ID" sort={@sort} />
@@ -797,6 +898,21 @@ defmodule ObanUI.Web.JobsLive do
           </tr>
         </tbody>
       </table>
+
+      <div :if={@job_count > 0} class="flex items-center justify-between mt-3 text-sm text-slate-500">
+        <div :if={@loaded_pages > 1} class="text-amber-600">
+          Live refresh paused while browsing older pages.
+          <button type="button" phx-click="clear_filters" class="underline">Back to latest</button>
+        </div>
+        <span :if={@loaded_pages == 1}>&nbsp;</span>
+
+        <button
+          :if={@next_cursor}
+          type="button"
+          phx-click="load_more"
+          class="oban-ui-btn-secondary"
+        >Load more</button>
+      </div>
 
       <.detail_drawer
         :if={@live_action == :show and @selected_job}
