@@ -20,6 +20,12 @@ defmodule ObanUI.Web.OnMount do
     oban_names = opts[:oban_names] || runtime_oban_names() || [Oban]
     base_path = opts[:base_path] || "/oban"
 
+    # When the host opts into sandbox-aware mounting (test env) we forward
+    # the encoded owner-PID + repo from the session to Ecto's sandbox so
+    # the LiveView process can see the test's fixture data. In production
+    # the cookie is never set and this is a no-op.
+    if opts[:sandbox], do: ObanUI.Sandbox.allow_from_session(session)
+
     user =
       if function_exported?(resolver, :resolve_user, 1) and socket.assigns[:current_user] do
         socket.assigns[:current_user]

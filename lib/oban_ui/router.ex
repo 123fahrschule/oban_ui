@@ -43,7 +43,8 @@ defmodule ObanUI.Router do
       Keyword.merge(
         [
           resolver: ObanUI.Resolver.Default,
-          oban_names: [Oban]
+          oban_names: [Oban],
+          sandbox: false
         ],
         opts
       )
@@ -61,7 +62,8 @@ defmodule ObanUI.Router do
               oban_names: opts[:oban_names],
               csp_nonce_assign_key: csp_key,
               base_path: path,
-              session_name: session_name
+              session_name: session_name,
+              sandbox: opts[:sandbox]
             }
           },
           on_mount: [{ObanUI.Web.OnMount, :default}],

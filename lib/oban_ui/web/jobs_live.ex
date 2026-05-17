@@ -26,6 +26,7 @@ defmodule ObanUI.Web.JobsLive do
   import ObanUI.Web.Components.Core
   import ObanUI.Web.Components.Layout, only: [shell: 1]
 
+  alias ObanUI.Diagnostics
   alias ObanUI.Notifier
   alias ObanUI.Jobs.Bulk
   alias ObanUI.Jobs.Edit
@@ -52,6 +53,7 @@ defmodule ObanUI.Web.JobsLive do
       |> assign(:job_count, 0)
       |> assign(:visible_ids, [])
       |> assign(:total_matches, 0)
+      |> assign(:filter_counts, %{})
       # When the user clicks "load more" we keep appending to the stream
       # instead of resetting on every tick. We track that mode here so the
       # live-refresh handler knows to back off.
@@ -190,6 +192,12 @@ defmodule ObanUI.Web.JobsLive do
         _ -> length(jobs)
       end
 
+    # Per-filter counts: for each populated filter run a separate COUNT(*)
+    # with ONLY that filter. Gives the operator a hint about how restrictive
+    # each active condition is on its own. Caps at the populated set so we
+    # never run more than however-many-filters-the-user-set queries.
+    filter_counts = compute_filter_counts(socket.assigns.filters)
+
     socket
     |> stream(:jobs, jobs, reset: true)
     |> assign(:counts, counts)
@@ -197,7 +205,26 @@ defmodule ObanUI.Web.JobsLive do
     |> assign(:job_count, length(jobs))
     |> assign(:visible_ids, Enum.map(jobs, & &1.id))
     |> assign(:total_matches, total)
+    |> assign(:filter_counts, filter_counts)
     |> assign(:loaded_pages, 1)
+  end
+
+  defp compute_filter_counts(filters) do
+    filters
+    |> Enum.reject(fn {_k, v} -> v in [nil, "", []] end)
+    |> Enum.map(fn {k, _v} ->
+      single = Map.take(filters, [k])
+
+      count =
+        try do
+          JobsQuery.count(single)
+        rescue
+          _ -> nil
+        end
+
+      {k, count}
+    end)
+    |> Map.new()
   end
 
   # Appends the next cursor page to the existing stream. Called from the
@@ -226,12 +253,27 @@ defmodule ObanUI.Web.JobsLive do
 
   defp maybe_load_detail(%{assigns: %{live_action: :show}} = socket, %{"id" => id}) do
     case Integer.parse(id) do
-      {int_id, ""} -> assign(socket, :selected_job, JobsQuery.get(int_id))
-      _ -> assign(socket, :selected_job, nil)
+      {int_id, ""} ->
+        job = JobsQuery.get(int_id)
+        diag = if job && job.state == "executing", do: Diagnostics.for_job(socket.assigns.active_oban, job)
+
+        socket
+        |> assign(:selected_job, job)
+        |> assign(:diagnostics, diag)
+
+      _ ->
+        socket
+        |> assign(:selected_job, nil)
+        |> assign(:diagnostics, nil)
     end
   end
 
-  defp maybe_load_detail(socket, _params), do: assign(socket, :selected_job, nil) |> assign(:edit_form, nil)
+  defp maybe_load_detail(socket, _params) do
+    socket
+    |> assign(:selected_job, nil)
+    |> assign(:edit_form, nil)
+    |> assign(:diagnostics, nil)
+  end
 
   # ----- live messages -----
 
@@ -735,44 +777,56 @@ defmodule ObanUI.Web.JobsLive do
         phx-submit="filter"
         class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-2 mb-4"
       >
-        <Combobox.render
-          field="worker"
-          value={join_list(@filters[:workers])}
-          placeholder="worker"
-          suggestions={@suggestions.worker}
-        />
-        <Combobox.render
-          field="queue"
-          value={join_list(@filters[:queues])}
-          placeholder="queue"
-          suggestions={@suggestions.queue}
-        />
-        <Combobox.render
-          field="tags"
-          value={join_list(@filters[:tags])}
-          placeholder="tags (comma)"
-          suggestions={@suggestions.tags}
-        />
-        <Combobox.render
-          field="node"
-          value={join_list(@filters[:nodes])}
-          placeholder="node"
-          suggestions={@suggestions.nodes}
-        />
-        <input
-          name="priority"
-          class="oban-ui-input"
-          placeholder="priority (0-9)"
-          value={join_list(@filters[:priorities])}
-          phx-debounce="300"
-        />
-        <input
-          name="q"
-          class="oban-ui-input"
-          placeholder="search args.path:value"
-          value={@filters[:search]}
-          phx-debounce="400"
-        />
+        <.filter_cell count={@filter_counts[:workers]}>
+          <Combobox.render
+            field="worker"
+            value={join_list(@filters[:workers])}
+            placeholder="worker"
+            suggestions={@suggestions.worker}
+          />
+        </.filter_cell>
+        <.filter_cell count={@filter_counts[:queues]}>
+          <Combobox.render
+            field="queue"
+            value={join_list(@filters[:queues])}
+            placeholder="queue"
+            suggestions={@suggestions.queue}
+          />
+        </.filter_cell>
+        <.filter_cell count={@filter_counts[:tags]}>
+          <Combobox.render
+            field="tags"
+            value={join_list(@filters[:tags])}
+            placeholder="tags (comma)"
+            suggestions={@suggestions.tags}
+          />
+        </.filter_cell>
+        <.filter_cell count={@filter_counts[:nodes]}>
+          <Combobox.render
+            field="node"
+            value={join_list(@filters[:nodes])}
+            placeholder="node"
+            suggestions={@suggestions.nodes}
+          />
+        </.filter_cell>
+        <.filter_cell count={@filter_counts[:priorities]}>
+          <input
+            name="priority"
+            class="oban-ui-input"
+            placeholder="priority (0-9)"
+            value={join_list(@filters[:priorities])}
+            phx-debounce="300"
+          />
+        </.filter_cell>
+        <.filter_cell count={@filter_counts[:search]}>
+          <input
+            name="q"
+            class="oban-ui-input"
+            placeholder="search args.path:value"
+            value={@filters[:search]}
+            phx-debounce="400"
+          />
+        </.filter_cell>
         <label class="text-xs text-slate-500 sm:col-span-1 flex items-center gap-1">
           <span>from</span>
           <input
@@ -920,12 +974,38 @@ defmodule ObanUI.Web.JobsLive do
         resolver={@resolver}
         access={@access}
         edit_form={@edit_form}
+        diagnostics={@diagnostics}
       />
     </.shell>
     """
   end
 
   # ---- sub-components ----
+
+  attr :count, :any, default: nil
+  slot :inner_block, required: true
+
+  # Tiny wrapper that renders a filter widget plus, if a count was computed
+  # for it, a "(N)" badge in the bottom-right corner of the cell. The badge
+  # tells the operator how restrictive that filter is on its own — useful
+  # when chaining several filters and wondering which one is doing the work.
+  defp filter_cell(assigns) do
+    ~H"""
+    <div class="relative">
+      {render_slot(@inner_block)}
+      <span
+        :if={is_integer(@count)}
+        class="absolute -top-2 right-1 text-[10px] font-mono bg-slate-200 text-slate-700 rounded-full px-1.5 py-0.5"
+        title={"#{@count} jobs match this filter alone"}
+      >
+        {format_count(@count)}
+      </span>
+    </div>
+    """
+  end
+
+  defp format_count(n) when n >= 1_000, do: "#{Float.round(n / 1000, 1)}k"
+  defp format_count(n), do: Integer.to_string(n)
 
   attr :counts, :map, required: true
   attr :active, :list, required: true
@@ -1092,6 +1172,7 @@ defmodule ObanUI.Web.JobsLive do
   attr :resolver, :atom, required: true
   attr :access, :map, required: true
   attr :edit_form, :any, default: nil
+  attr :diagnostics, :any, default: nil
 
   defp detail_drawer(assigns) do
     formatted_args =
@@ -1148,6 +1229,14 @@ defmodule ObanUI.Web.JobsLive do
       <section class="mb-4">
         <h3 class="text-sm font-medium mb-1">Timeline</h3>
         <Timeline.render job={@job} />
+      </section>
+
+      <section :if={@diagnostics} class="mb-4">
+        <h3 class="text-sm font-medium mb-1">
+          Live diagnostics
+          <span class="text-xs text-slate-500 font-normal">(at open)</span>
+        </h3>
+        <.diagnostics_panel info={@diagnostics} />
       </section>
 
       <%= if @edit_form do %>
@@ -1210,6 +1299,76 @@ defmodule ObanUI.Web.JobsLive do
     </aside>
     """
   end
+
+  attr :info, :map, required: true
+
+  defp diagnostics_panel(%{info: %{available: true}} = assigns) do
+    ~H"""
+    <div class="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs space-y-1">
+      <p class="text-slate-600">
+        Node: <span class="font-mono">{@info.node}</span> · PID:
+        <span class="font-mono">{inspect(@info.pid)}</span>
+      </p>
+      <p class="text-slate-600">
+        Status: <strong>{@info.status}</strong> · Memory:
+        <strong>{format_bytes(@info.memory)}</strong> · Msg queue:
+        <strong>{@info.message_queue_len}</strong> · Reductions:
+        <strong>{format_int(@info.reductions)}</strong>
+      </p>
+      <p class="text-slate-600">
+        Current function:
+        <span class="font-mono">{format_mfa(@info.current_function)}</span>
+      </p>
+      <details class="mt-1">
+        <summary class="cursor-pointer text-slate-600">
+          Stacktrace ({length(@info.current_stacktrace || [])} frames)
+        </summary>
+        <.pre content={format_stacktrace(@info.current_stacktrace)} />
+      </details>
+    </div>
+    """
+  end
+
+  defp diagnostics_panel(%{info: %{available: false}} = assigns) do
+    ~H"""
+    <div class="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+      Process not available. {@info[:reason]}
+    </div>
+    """
+  end
+
+  defp format_bytes(nil), do: "—"
+  defp format_bytes(n) when n < 1024, do: "#{n} B"
+  defp format_bytes(n) when n < 1024 * 1024, do: "#{div(n, 1024)} KB"
+  defp format_bytes(n), do: "#{Float.round(n / (1024 * 1024), 2)} MB"
+
+  defp format_int(nil), do: "—"
+  defp format_int(n) when is_integer(n), do: Integer.to_string(n)
+
+  defp format_mfa({m, f, a}), do: "#{inspect(m)}.#{f}/#{a}"
+  defp format_mfa(_), do: "—"
+
+  defp format_stacktrace(nil), do: "—"
+  defp format_stacktrace([]), do: "—"
+
+  defp format_stacktrace(frames) do
+    Enum.map_join(frames, "\n", fn
+      {m, f, a, loc} ->
+        "  #{inspect(m)}.#{f}/#{a} #{format_loc(loc)}"
+
+      other ->
+        inspect(other)
+    end)
+  end
+
+  defp format_loc(loc) when is_list(loc) do
+    case Keyword.get(loc, :file) do
+      nil -> ""
+      file -> "(#{file}:#{Keyword.get(loc, :line, "?")})"
+    end
+  end
+
+  defp format_loc(_), do: ""
 
   attr :job, :map, required: true
   attr :form, :map, required: true
