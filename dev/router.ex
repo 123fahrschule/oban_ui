@@ -23,7 +23,7 @@ defmodule ObanUI.DevApp.Router do
 
     get "/", ObanUI.DevApp.HomeController, :index
 
-    oban_ui_dashboard "/oban", oban_names: @oban_names
+    oban_ui_dashboard("/oban", oban_names: @oban_names)
   end
 end
 

@@ -37,6 +37,9 @@ oban_ui-*.tar
 /.env.*
 !/.env.example
 
+# Dialyzer PLT cache
+/priv/plts/
+
 # IDE
 .elixir_ls/
 .lexical/

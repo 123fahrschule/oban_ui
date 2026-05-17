@@ -27,20 +27,22 @@ defmodule ObanUI.Web.JobsLive do
   import ObanUI.Web.Components.Layout, only: [shell: 1]
 
   alias ObanUI.Diagnostics
-  alias ObanUI.Notifier
   alias ObanUI.Jobs.Bulk
   alias ObanUI.Jobs.Edit
+  alias ObanUI.Notifier
   alias ObanUI.Queries.Jobs, as: JobsQuery
   alias ObanUI.Queries.Suggestions
   alias ObanUI.Web.Components.{Combobox, EmptyState, Timeline}
+  alias ObanUI.Web.JobsLive.FilterParser
   alias Phoenix.LiveView.JS
 
   @page_size 25
 
-  @impl true
+  @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
     if connected?(socket) do
-      :ok = Phoenix.PubSub.subscribe(pubsub(), Notifier.topic({:jobs, socket.assigns.active_oban}))
+      :ok =
+        Phoenix.PubSub.subscribe(pubsub(), Notifier.topic({:jobs, socket.assigns.active_oban}))
     end
 
     socket =
@@ -62,108 +64,24 @@ defmodule ObanUI.Web.JobsLive do
       |> assign(:selected_ids, MapSet.new())
       |> assign(:bulk_state, nil)
       |> assign(:edit_form, nil)
+      |> assign(:expand_args, false)
       |> assign(:suggestions, %{worker: [], queue: [], tags: [], nodes: []})
       |> stream(:jobs, [])
 
     {:ok, socket}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_params(params, _uri, socket) do
-    filters = parse_filters(params)
-    sort = parse_sort(params)
-
     socket =
       socket
-      |> assign(:filters, filters)
-      |> assign(:sort, sort)
+      |> assign(:filters, FilterParser.build(params))
+      |> assign(:sort, FilterParser.sort(params["sort"]))
       |> load_jobs()
       |> maybe_load_detail(params)
 
     {:noreply, socket}
   end
-
-  # ----- filter parsing -----
-
-  defp parse_filters(params) do
-    %{}
-    |> maybe_put(:states, split_param(params["state"]))
-    |> maybe_put(:queues, split_param(params["queue"]))
-    |> maybe_put(:workers, split_param(params["worker"]))
-    |> maybe_put(:tags, split_param(params["tags"]))
-    |> maybe_put(:nodes, split_param(params["node"]))
-    |> maybe_put(:priorities, parse_int_list(params["priority"]))
-    |> maybe_put(:search, present(params["q"]))
-    |> maybe_put(:inserted_after, parse_dt(params["from"]))
-    |> maybe_put(:inserted_before, parse_dt(params["to"]))
-  end
-
-  defp parse_sort(%{"sort" => raw}) when is_binary(raw) do
-    case String.split(raw, ":", parts: 2) do
-      [field, dir] ->
-        field_atom = safe_field_atom(field)
-        dir_atom = if dir == "asc", do: :asc, else: :desc
-        if field_atom, do: {field_atom, dir_atom}, else: nil
-
-      _ ->
-        nil
-    end
-  end
-
-  defp parse_sort(_), do: nil
-
-  defp safe_field_atom(name) do
-    fields = JobsQuery.sortable_fields()
-    Enum.find(fields, &(Atom.to_string(&1) == name))
-  end
-
-  defp split_param(nil), do: nil
-  defp split_param(""), do: nil
-
-  defp split_param(value) when is_binary(value),
-    do: value |> String.split(",", trim: true) |> Enum.map(&String.trim/1)
-
-  defp parse_int_list(nil), do: nil
-  defp parse_int_list(""), do: nil
-
-  defp parse_int_list(value) when is_binary(value) do
-    value
-    |> String.split(",", trim: true)
-    |> Enum.flat_map(fn s ->
-      case Integer.parse(String.trim(s)) do
-        {n, ""} -> [n]
-        _ -> []
-      end
-    end)
-    |> case do
-      [] -> nil
-      list -> list
-    end
-  end
-
-  defp parse_dt(nil), do: nil
-  defp parse_dt(""), do: nil
-
-  defp parse_dt(s) when is_binary(s) do
-    case DateTime.from_iso8601(s) do
-      {:ok, dt, _} ->
-        dt
-
-      _ ->
-        case NaiveDateTime.from_iso8601(s <> ":00") do
-          {:ok, ndt} -> DateTime.from_naive!(ndt, "Etc/UTC")
-          _ -> nil
-        end
-    end
-  end
-
-  defp present(nil), do: nil
-  defp present(""), do: nil
-  defp present(v), do: v
-
-  defp maybe_put(map, _key, nil), do: map
-  defp maybe_put(map, _key, []), do: map
-  defp maybe_put(map, key, value), do: Map.put(map, key, value)
 
   # ----- loading -----
 
@@ -255,16 +173,21 @@ defmodule ObanUI.Web.JobsLive do
     case Integer.parse(id) do
       {int_id, ""} ->
         job = JobsQuery.get(int_id)
-        diag = if job && job.state == "executing", do: Diagnostics.for_job(socket.assigns.active_oban, job)
+
+        diag =
+          if job && job.state == "executing",
+            do: Diagnostics.for_job(socket.assigns.active_oban, job)
 
         socket
         |> assign(:selected_job, job)
         |> assign(:diagnostics, diag)
+        |> assign(:expand_args, false)
 
       _ ->
         socket
         |> assign(:selected_job, nil)
         |> assign(:diagnostics, nil)
+        |> assign(:expand_args, false)
     end
   end
 
@@ -273,11 +196,12 @@ defmodule ObanUI.Web.JobsLive do
     |> assign(:selected_job, nil)
     |> assign(:edit_form, nil)
     |> assign(:diagnostics, nil)
+    |> assign(:expand_args, false)
   end
 
   # ----- live messages -----
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_info({:tick, _buffer}, socket) do
     cond do
       socket.assigns[:reload_pending] ->
@@ -325,7 +249,7 @@ defmodule ObanUI.Web.JobsLive do
 
   # ----- events: filters / sort / nav -----
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("filter", params, socket) do
     # The state-tabs and sort buttons live outside the form, so a plain
     # phx-change firing would wipe them out of the URL. Merge the form-only
@@ -368,7 +292,9 @@ defmodule ObanUI.Web.JobsLive do
   end
 
   def handle_event("sort", %{"field" => field}, socket) do
-    field_atom = safe_field_atom(field)
+    # Same field-validation as in FilterParser — only known sortable fields.
+    field_atom =
+      Enum.find(JobsQuery.sortable_fields(), &(Atom.to_string(&1) == field))
 
     sort =
       case {field_atom, socket.assigns.sort} do
@@ -411,6 +337,14 @@ defmodule ObanUI.Web.JobsLive do
   def handle_event("retry", %{"id" => id}, socket), do: handle_action(socket, :retry, id)
   def handle_event("cancel", %{"id" => id}, socket), do: handle_action(socket, :cancel, id)
   def handle_event("delete", %{"id" => id}, socket), do: handle_action(socket, :delete, id)
+
+  def handle_event("expand_args", _params, socket) do
+    {:noreply, assign(socket, :expand_args, true)}
+  end
+
+  def handle_event("collapse_args", _params, socket) do
+    {:noreply, assign(socket, :expand_args, false)}
+  end
 
   def handle_event("close_detail", _params, socket) do
     {:noreply, push_patch(socket, to: jobs_path(socket, build_query_from_filters(socket)))}
@@ -503,8 +437,7 @@ defmodule ObanUI.Web.JobsLive do
              })}
 
           {:error, :forbidden} ->
-            {:noreply,
-             socket |> assign(:bulk_state, nil) |> put_flash(:error, "Not permitted")}
+            {:noreply, socket |> assign(:bulk_state, nil) |> put_flash(:error, "Not permitted")}
 
           {:error, reason} ->
             {:noreply,
@@ -539,8 +472,7 @@ defmodule ObanUI.Web.JobsLive do
   end
 
   def handle_event("edit_change", %{"job" => attrs}, socket) do
-    {:noreply,
-     assign(socket, :edit_form, Map.merge(socket.assigns.edit_form || %{}, attrs))}
+    {:noreply, assign(socket, :edit_form, Map.merge(socket.assigns.edit_form || %{}, attrs))}
   end
 
   def handle_event("edit_cancel", _params, socket) do
@@ -748,11 +680,12 @@ defmodule ObanUI.Web.JobsLive do
   end
 
   defp format_dt_input(%NaiveDateTime{} = ndt),
-    do: ndt |> NaiveDateTime.truncate(:second) |> NaiveDateTime.to_iso8601() |> String.slice(0, 16)
+    do:
+      ndt |> NaiveDateTime.truncate(:second) |> NaiveDateTime.to_iso8601() |> String.slice(0, 16)
 
   # ----- render -----
 
-  @impl true
+  @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
     <.shell
@@ -848,14 +781,14 @@ defmodule ObanUI.Web.JobsLive do
       </form>
 
       <p class="text-xs text-slate-500 mb-2">
-        Showing
-        <strong>{@job_count}</strong>
+        Showing <strong>{@job_count}</strong>
         <span :if={@total_matches > @job_count}>of {@total_matches}</span>
         matching job<span :if={@total_matches != 1}>s</span>
         <span :if={filters_present?(@filters)} class="text-slate-400">· filtered</span>
       </p>
 
-      <.bulk_bar :if={MapSet.size(@selected_ids) > 0 or filters_present?(@filters)}
+      <.bulk_bar
+        :if={MapSet.size(@selected_ids) > 0 or filters_present?(@filters)}
         selected={MapSet.size(@selected_ids)}
         access={@access}
       />
@@ -930,24 +863,35 @@ defmodule ObanUI.Web.JobsLive do
             <td class="text-right space-x-1" onclick="event.stopPropagation()">
               <.button
                 variant="secondary"
-                can?={@access.retry_jobs and job.state in ~w(cancelled discarded retryable scheduled completed)}
+                can?={
+                  @access.retry_jobs and
+                    job.state in ~w(cancelled discarded retryable scheduled completed)
+                }
                 phx-click="retry"
                 phx-value-id={job.id}
-              >Retry</.button>
+              >
+                Retry
+              </.button>
               <.button
                 variant="secondary"
-                can?={@access.cancel_jobs and job.state in ~w(available scheduled executing retryable)}
+                can?={
+                  @access.cancel_jobs and job.state in ~w(available scheduled executing retryable)
+                }
                 phx-click="cancel"
                 phx-value-id={job.id}
                 data-confirm="Cancel this job?"
-              >Cancel</.button>
+              >
+                Cancel
+              </.button>
               <.button
                 variant="danger"
                 can?={@access.delete_jobs}
                 phx-click="delete"
                 phx-value-id={job.id}
                 data-confirm="Permanently delete this job?"
-              >Delete</.button>
+              >
+                Delete
+              </.button>
             </td>
           </tr>
         </tbody>
@@ -965,7 +909,9 @@ defmodule ObanUI.Web.JobsLive do
           type="button"
           phx-click="load_more"
           class="oban-ui-btn-secondary"
-        >Load more</button>
+        >
+          Load more
+        </button>
       </div>
 
       <.detail_drawer
@@ -975,6 +921,7 @@ defmodule ObanUI.Web.JobsLive do
         access={@access}
         edit_form={@edit_form}
         diagnostics={@diagnostics}
+        expand_args={@expand_args}
       />
     </.shell>
     """
@@ -1020,7 +967,7 @@ defmodule ObanUI.Web.JobsLive do
         phx-value-state={state}
         class={[
           "oban-ui-badge cursor-pointer transition-opacity",
-          state in @active && "ring-2 ring-oban-500" || "opacity-70 hover:opacity-100"
+          (state in @active && "ring-2 ring-oban-500") || "opacity-70 hover:opacity-100"
         ]}
         data-state={state}
       >
@@ -1051,7 +998,9 @@ defmodule ObanUI.Web.JobsLive do
         phx-click="sort"
         phx-value-field={@field}
         class="hover:underline"
-      >{@label}{@arrow}</button>
+      >
+        {@label}{@arrow}
+      </button>
     </th>
     """
   end
@@ -1071,25 +1020,33 @@ defmodule ObanUI.Web.JobsLive do
           can?={@access.retry_jobs}
           phx-click="bulk_preview"
           phx-value-action="retry"
-        >Retry…</.button>
+        >
+          Retry…
+        </.button>
         <.button
           variant="secondary"
           can?={@access.cancel_jobs}
           phx-click="bulk_preview"
           phx-value-action="cancel"
-        >Cancel…</.button>
+        >
+          Cancel…
+        </.button>
         <.button
           variant="danger"
           can?={@access.delete_jobs}
           phx-click="bulk_preview"
           phx-value-action="delete"
-        >Delete…</.button>
+        >
+          Delete…
+        </.button>
         <.button
           :if={@selected > 0}
           variant="secondary"
           can?={true}
           phx-click="clear_selection"
-        >Clear</.button>
+        >
+          Clear
+        </.button>
       </div>
     </div>
     """
@@ -1128,7 +1085,8 @@ defmodule ObanUI.Web.JobsLive do
           <div
             class="bg-oban-500 h-2 rounded-full"
             style={"width: #{progress_pct(@state)}%"}
-          ></div>
+          >
+          </div>
         </div>
       </div>
     </div>
@@ -1173,6 +1131,14 @@ defmodule ObanUI.Web.JobsLive do
   attr :access, :map, required: true
   attr :edit_form, :any, default: nil
   attr :diagnostics, :any, default: nil
+  attr :expand_args, :boolean, default: false
+
+  # Truncate args/meta preview at this byte count. Anything larger gets
+  # rendered as a head excerpt + a "Show full" toggle that reveals the
+  # rest on demand. Multi-MB args are normal in some hosts (compressed
+  # blobs, recorded payloads, ...) and slamming the entire string into
+  # the LV diff blocks the page on every drawer open.
+  @args_preview_bytes 2_000
 
   defp detail_drawer(assigns) do
     formatted_args =
@@ -1191,9 +1157,14 @@ defmodule ObanUI.Web.JobsLive do
 
     editable? = assigns.job.state in Edit.editable_states()
 
+    {args_to_render, args_truncated?, args_byte_size} =
+      args_view(formatted_args, assigns.expand_args)
+
     assigns =
       assigns
-      |> assign(:formatted_args, formatted_args)
+      |> assign(:formatted_args, args_to_render)
+      |> assign(:args_truncated?, args_truncated?)
+      |> assign(:args_byte_size, args_byte_size)
       |> assign(:formatted_meta, formatted_meta)
       |> assign(:editable?, editable?)
 
@@ -1213,9 +1184,12 @@ defmodule ObanUI.Web.JobsLive do
           <h2
             id={"job-detail-title-" <> Integer.to_string(@job.id)}
             class="text-lg font-semibold"
-          >{@job.worker}</h2>
+          >
+            {@job.worker}
+          </h2>
           <p class="text-xs text-slate-500">
-            <.state_badge state={@job.state} /> · {@job.queue} · attempt {@job.attempt}/{@job.max_attempts}
+            <.state_badge state={@job.state} />
+            · {@job.queue} · attempt {@job.attempt}/{@job.max_attempts}
           </p>
         </div>
         <button
@@ -1223,7 +1197,9 @@ defmodule ObanUI.Web.JobsLive do
           class="oban-ui-btn-secondary"
           phx-click="close_detail"
           aria-label="Close detail"
-        >×</button>
+        >
+          ×
+        </button>
       </div>
 
       <section class="mb-4">
@@ -1233,8 +1209,7 @@ defmodule ObanUI.Web.JobsLive do
 
       <section :if={@diagnostics} class="mb-4">
         <h3 class="text-sm font-medium mb-1">
-          Live diagnostics
-          <span class="text-xs text-slate-500 font-normal">(at open)</span>
+          Live diagnostics <span class="text-xs text-slate-500 font-normal">(at open)</span>
         </h3>
         <.diagnostics_panel info={@diagnostics} />
       </section>
@@ -1243,16 +1218,38 @@ defmodule ObanUI.Web.JobsLive do
         <.edit_form job={@job} form={@edit_form} />
       <% else %>
         <section class="mb-4">
-          <h3 class="text-sm font-medium mb-1">Args
+          <h3 class="text-sm font-medium mb-1">
+            Args
             <span
               class="ml-1 text-xs text-slate-500"
               title="Edit disabled — host serialises args; see resolver.format_job_args/1"
-            >(read-only)</span>
+            >
+              (read-only)
+            </span>
+            <span :if={@args_truncated?} class="ml-1 text-xs text-amber-700">
+              · truncated, full size {format_bytes(@args_byte_size)}
+            </span>
           </h3>
           <.pre content={@formatted_args} />
+          <button
+            :if={@args_truncated? and not @expand_args}
+            type="button"
+            phx-click="expand_args"
+            class="oban-ui-btn-secondary mt-1 text-xs"
+          >
+            Show full args
+          </button>
+          <button
+            :if={@expand_args}
+            type="button"
+            phx-click="collapse_args"
+            class="oban-ui-btn-secondary mt-1 text-xs"
+          >
+            Collapse
+          </button>
         </section>
 
-        <section class="mb-4" :if={@formatted_meta not in [nil, %{}, %{"_" => nil}]}>
+        <section :if={@formatted_meta not in [nil, %{}, %{"_" => nil}]} class="mb-4">
           <h3 class="text-sm font-medium mb-1">Meta</h3>
           <.pre content={@formatted_meta} />
         </section>
@@ -1273,27 +1270,37 @@ defmodule ObanUI.Web.JobsLive do
             can?={@access.retry_jobs}
             phx-click="retry"
             phx-value-id={@job.id}
-          >Retry</.button>
+          >
+            Retry
+          </.button>
           <.button
             variant="secondary"
             can?={@access.cancel_jobs}
             phx-click="cancel"
             phx-value-id={@job.id}
             data-confirm="Cancel this job?"
-          >Cancel</.button>
+          >
+            Cancel
+          </.button>
           <.button
             variant="danger"
             can?={@access.delete_jobs}
             phx-click="delete"
             phx-value-id={@job.id}
             data-confirm="Permanently delete this job?"
-          >Delete</.button>
+          >
+            Delete
+          </.button>
           <.button
             variant="secondary"
             can?={@access.edit_jobs and @editable?}
-            reason={if @editable?, do: "Insufficient permissions", else: "Cannot edit a #{@job.state} job"}
+            reason={
+              if @editable?, do: "Insufficient permissions", else: "Cannot edit a #{@job.state} job"
+            }
             phx-click="edit_start"
-          >Edit</.button>
+          >
+            Edit
+          </.button>
         </section>
       <% end %>
     </aside>
@@ -1306,18 +1313,17 @@ defmodule ObanUI.Web.JobsLive do
     ~H"""
     <div class="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs space-y-1">
       <p class="text-slate-600">
-        Node: <span class="font-mono">{@info.node}</span> · PID:
-        <span class="font-mono">{inspect(@info.pid)}</span>
+        Node: <span class="font-mono">{@info.node}</span>
+        · PID: <span class="font-mono">{inspect(@info.pid)}</span>
       </p>
       <p class="text-slate-600">
-        Status: <strong>{@info.status}</strong> · Memory:
-        <strong>{format_bytes(@info.memory)}</strong> · Msg queue:
-        <strong>{@info.message_queue_len}</strong> · Reductions:
-        <strong>{format_int(@info.reductions)}</strong>
+        Status: <strong>{@info.status}</strong>
+        · Memory: <strong>{format_bytes(@info.memory)}</strong>
+        · Msg queue: <strong>{@info.message_queue_len}</strong>
+        · Reductions: <strong>{format_int(@info.reductions)}</strong>
       </p>
       <p class="text-slate-600">
-        Current function:
-        <span class="font-mono">{format_mfa(@info.current_function)}</span>
+        Current function: <span class="font-mono">{format_mfa(@info.current_function)}</span>
       </p>
       <details class="mt-1">
         <summary class="cursor-pointer text-slate-600">
@@ -1341,6 +1347,24 @@ defmodule ObanUI.Web.JobsLive do
   defp format_bytes(n) when n < 1024, do: "#{n} B"
   defp format_bytes(n) when n < 1024 * 1024, do: "#{div(n, 1024)} KB"
   defp format_bytes(n), do: "#{Float.round(n / (1024 * 1024), 2)} MB"
+
+  # Returns {rendered_args, truncated?, byte_size_of_full_string}.
+  # If `expand?` is true, hand the entire formatted args back.
+  defp args_view(args, expand?) do
+    text =
+      case args do
+        binary when is_binary(binary) -> binary
+        other -> inspect(other, pretty: true, limit: :infinity, printable_limit: :infinity)
+      end
+
+    full_size = byte_size(text)
+
+    cond do
+      full_size <= @args_preview_bytes -> {text, false, full_size}
+      expand? -> {text, false, full_size}
+      true -> {binary_part(text, 0, @args_preview_bytes) <> "\n…", true, full_size}
+    end
+  end
 
   defp format_int(nil), do: "—"
   defp format_int(n) when is_integer(n), do: Integer.to_string(n)

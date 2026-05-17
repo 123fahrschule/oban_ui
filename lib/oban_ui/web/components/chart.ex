@@ -21,10 +21,12 @@ defmodule ObanUI.Web.Components.Chart do
   @padding_top 12
   @padding_bottom 28
 
-  attr :series, :list, required: true,
+  attr :series, :list,
+    required: true,
     doc: "list of %{label: String.t(), color: String.t(), values: [number()]}"
 
-  attr :labels, :list, default: [],
+  attr :labels, :list,
+    default: [],
     doc: "x-axis labels parallel to series values; same length as :values"
 
   attr :stacked, :boolean, default: false
@@ -103,7 +105,9 @@ defmodule ObanUI.Web.Components.Chart do
             text-anchor="end"
             fill="currentColor"
             fill-opacity="0.6"
-          >{g.label}</text>
+          >
+            {g.label}
+          </text>
         </g>
 
         <%!-- Series --%>
@@ -135,7 +139,9 @@ defmodule ObanUI.Web.Components.Chart do
             font-size="10"
             fill="currentColor"
             fill-opacity="0.6"
-          >{List.first(@labels)}</text>
+          >
+            {List.first(@labels)}
+          </text>
           <text
             x={(@padding_left + @width - @padding_right) / 2}
             y={@padding_top + @plot_h + 14}
@@ -143,7 +149,9 @@ defmodule ObanUI.Web.Components.Chart do
             text-anchor="middle"
             fill="currentColor"
             fill-opacity="0.6"
-          >{middle_label(@labels)}</text>
+          >
+            {middle_label(@labels)}
+          </text>
           <text
             x={@width - @padding_right}
             y={@padding_top + @plot_h + 14}
@@ -151,7 +159,9 @@ defmodule ObanUI.Web.Components.Chart do
             text-anchor="end"
             fill="currentColor"
             fill-opacity="0.6"
-          >{List.last(@labels)}</text>
+          >
+            {List.last(@labels)}
+          </text>
         </g>
       </svg>
 

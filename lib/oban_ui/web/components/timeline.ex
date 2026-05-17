@@ -82,7 +82,8 @@ defmodule ObanUI.Web.Components.Timeline do
 
         <%!-- Connectors between consecutive events on the same attempt --%>
         <g :for={attempt <- Map.keys(@lanes_for_attempt)}>
-          <% sorted_points = Enum.filter(@points, &(&1.attempt == attempt)) |> Enum.sort_by(& &1.at, DateTime) %>
+          <% sorted_points =
+            Enum.filter(@points, &(&1.attempt == attempt)) |> Enum.sort_by(& &1.at, DateTime) %>
           <line
             :for={[a, b] <- chunks_of_2(sorted_points)}
             x1={a.x}
@@ -140,7 +141,12 @@ defmodule ObanUI.Web.Components.Timeline do
 
       <ul class="flex flex-wrap gap-3 text-xs text-slate-600 mt-1" aria-label="Event legend">
         <li :for={{label, color} <- @legend} class="inline-flex items-center gap-1">
-          <span class="inline-block w-2.5 h-2.5 rounded-full" style={"background: #{color}"} aria-hidden="true"></span>
+          <span
+            class="inline-block w-2.5 h-2.5 rounded-full"
+            style={"background: #{color}"}
+            aria-hidden="true"
+          >
+          </span>
           {label}
         </li>
       </ul>

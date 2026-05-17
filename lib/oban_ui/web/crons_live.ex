@@ -16,7 +16,7 @@ defmodule ObanUI.Web.CronsLive do
 
   @refresh_ms 30_000
 
-  @impl true
+  @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
     if connected?(socket) do
       Process.send_after(self(), :refresh, @refresh_ms)
@@ -28,7 +28,7 @@ defmodule ObanUI.Web.CronsLive do
      |> load()}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_info(:refresh, socket) do
     Process.send_after(self(), :refresh, @refresh_ms)
     {:noreply, load(socket)}
@@ -36,7 +36,7 @@ defmodule ObanUI.Web.CronsLive do
 
   def handle_info(_, socket), do: {:noreply, socket}
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("switch_instance", %{"value" => name}, socket) do
     case Enum.find(socket.assigns.oban_names, &(to_string(&1) == name)) do
       nil -> {:noreply, socket}
@@ -55,7 +55,7 @@ defmodule ObanUI.Web.CronsLive do
     assign(socket, :crons, crons)
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
     <.shell
@@ -68,8 +68,9 @@ defmodule ObanUI.Web.CronsLive do
       <.page_header title="Crons" />
 
       <EmptyState.render :if={@crons == []} title="No cron entries configured.">
-        Add <code class="font-mono">Oban.Plugins.Cron</code> with a
-        <code class="font-mono">:crontab</code> list to your Oban supervisor and they
+        Add <code class="font-mono">Oban.Plugins.Cron</code>
+        with a <code class="font-mono">:crontab</code>
+        list to your Oban supervisor and they
         will show up here on the next refresh.
       </EmptyState.render>
 

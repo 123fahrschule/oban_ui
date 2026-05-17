@@ -72,13 +72,11 @@ defmodule ObanUI.Queries.Queues do
   """
   @spec check(atom(), String.t()) :: map()
   def check(oban_name, queue) when is_binary(queue) do
-    try do
-      Oban.check_queue(oban_name, queue: String.to_existing_atom(queue))
-    rescue
-      _ -> %{queue: queue, available: false}
-    catch
-      _, _ -> %{queue: queue, available: false}
-    end
+    Oban.check_queue(oban_name, queue: String.to_existing_atom(queue))
+  rescue
+    _ -> %{queue: queue, available: false}
+  catch
+    _, _ -> %{queue: queue, available: false}
   end
 
   @doc """

@@ -9,13 +9,13 @@ defmodule ObanUI.Resolver.Default do
 
   @behaviour ObanUI.Resolver
 
-  @impl true
+  @impl ObanUI.Resolver
   def resolve_user(conn), do: Map.get(conn.assigns, :current_user)
 
-  @impl true
+  @impl ObanUI.Resolver
   def resolve_access(_user), do: :all
 
-  @impl true
+  @impl ObanUI.Resolver
   def format_user(nil), do: %{name: "anonymous", email: nil}
 
   def format_user(%{name: name} = user),
@@ -23,9 +23,9 @@ defmodule ObanUI.Resolver.Default do
 
   def format_user(other), do: %{name: inspect(other), email: nil}
 
-  @impl true
+  @impl ObanUI.Resolver
   def format_job_args(args), do: args
 
-  @impl true
+  @impl ObanUI.Resolver
   def format_job_meta(meta), do: meta
 end

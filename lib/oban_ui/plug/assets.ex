@@ -20,8 +20,8 @@ defmodule ObanUI.Plug.Assets do
   @external_resource @css_path
   @external_resource @js_path
 
-  @css_body (if File.exists?(@css_path), do: File.read!(@css_path), else: "/* not built */")
-  @js_body (if File.exists?(@js_path), do: File.read!(@js_path), else: "/* not built */")
+  @css_body if File.exists?(@css_path), do: File.read!(@css_path), else: "/* not built */"
+  @js_body if File.exists?(@js_path), do: File.read!(@js_path), else: "/* not built */"
 
   @css_hash :crypto.hash(:sha256, @css_body) |> Base.encode16(case: :lower) |> binary_part(0, 12)
   @js_hash :crypto.hash(:sha256, @js_body) |> Base.encode16(case: :lower) |> binary_part(0, 12)
@@ -38,7 +38,9 @@ defmodule ObanUI.Plug.Assets do
   def init(kind) when kind in [:css, :js], do: kind
 
   def call(conn, :css), do: serve(conn, @css_body, "text/css; charset=utf-8", @css_hash)
-  def call(conn, :js), do: serve(conn, @js_body, "application/javascript; charset=utf-8", @js_hash)
+
+  def call(conn, :js),
+    do: serve(conn, @js_body, "application/javascript; charset=utf-8", @js_hash)
 
   defp serve(conn, body, content_type, hash) do
     requested = Map.get(conn.path_params, "file", "")

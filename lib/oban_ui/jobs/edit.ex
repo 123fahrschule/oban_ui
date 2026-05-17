@@ -98,11 +98,20 @@ defmodule ObanUI.Jobs.Edit do
   # Accept maps with either atom or string keys; coerce comma-separated tags.
   defp normalise(attrs) do
     Enum.reduce(attrs, %{}, fn
-      {k, v}, acc when k in [:tags, "tags"] -> Map.put(acc, :tags, parse_tags(v))
-      {k, v}, acc when k in [:priority, "priority"] -> Map.put(acc, :priority, to_int(v))
-      {k, v}, acc when k in [:max_attempts, "max_attempts"] -> Map.put(acc, :max_attempts, to_int(v))
-      {k, v}, acc when k in [:scheduled_at, "scheduled_at"] -> Map.put(acc, :scheduled_at, parse_dt(v))
-      _, acc -> acc
+      {k, v}, acc when k in [:tags, "tags"] ->
+        Map.put(acc, :tags, parse_tags(v))
+
+      {k, v}, acc when k in [:priority, "priority"] ->
+        Map.put(acc, :priority, to_int(v))
+
+      {k, v}, acc when k in [:max_attempts, "max_attempts"] ->
+        Map.put(acc, :max_attempts, to_int(v))
+
+      {k, v}, acc when k in [:scheduled_at, "scheduled_at"] ->
+        Map.put(acc, :scheduled_at, parse_dt(v))
+
+      _, acc ->
+        acc
     end)
   end
 

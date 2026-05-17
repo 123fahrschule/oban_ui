@@ -32,7 +32,7 @@ defmodule ObanUI.Web.DashboardLive do
     "7d" => 604_800
   }
 
-  @impl true
+  @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
     if connected?(socket) do
       :ok =
@@ -51,7 +51,7 @@ defmodule ObanUI.Web.DashboardLive do
      |> load()}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_params(params, _uri, socket) do
     {:noreply,
      socket
@@ -59,7 +59,7 @@ defmodule ObanUI.Web.DashboardLive do
      |> load()}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_info({:tick, _buffer}, socket), do: {:noreply, load(socket)}
   def handle_info(:leader_changed, socket), do: {:noreply, load(socket)}
 
@@ -70,7 +70,7 @@ defmodule ObanUI.Web.DashboardLive do
 
   def handle_info(_, socket), do: {:noreply, socket}
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("set_range", %{"range" => range}, socket)
       when is_map_key(@ranges, range) do
     {:noreply,
@@ -163,7 +163,7 @@ defmodule ObanUI.Web.DashboardLive do
     _, _ -> default
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
     <.shell
@@ -180,7 +180,9 @@ defmodule ObanUI.Web.DashboardLive do
       </.page_header>
 
       <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 mb-4">
-        <.card :for={state <- ~w(available executing scheduled retryable completed cancelled discarded)}>
+        <.card :for={
+          state <- ~w(available executing scheduled retryable completed cancelled discarded)
+        }>
           <p class="text-xs uppercase text-slate-500">{state}</p>
           <p class="text-2xl font-semibold">{Map.get(@counts, state, 0)}</p>
         </.card>
@@ -189,11 +191,15 @@ defmodule ObanUI.Web.DashboardLive do
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <.card class="lg:col-span-2">
           <p class="text-sm font-medium mb-2">Throughput · {@range}</p>
-          <Chart.render :if={@chart_series != []} series={@chart_series} labels={@chart_labels} stacked={true} />
+          <Chart.render
+            :if={@chart_series != []}
+            series={@chart_series}
+            labels={@chart_labels}
+            stacked={true}
+          />
           <EmptyState.render :if={@chart_series == []} title="No throughput data yet.">
             Charts populate once jobs complete or fail. If you have just enabled
-            persistence, restart your app — the dashboard will hydrate from
-            <code class="font-mono">oban_ui_metrics</code>.
+            persistence, restart your app — the dashboard will hydrate from <code class="font-mono">oban_ui_metrics</code>.
           </EmptyState.render>
         </.card>
 
@@ -240,9 +246,11 @@ defmodule ObanUI.Web.DashboardLive do
         phx-value-range={range}
         class={[
           "oban-ui-btn-secondary",
-          range == @current && "ring-2 ring-oban-500" || ""
+          (range == @current && "ring-2 ring-oban-500") || ""
         ]}
-      >{range}</button>
+      >
+        {range}
+      </button>
     </div>
     """
   end

@@ -4,7 +4,10 @@ defmodule ObanUI.Jobs.BulkTest do
   alias ObanUI.Jobs.Bulk
 
   @actor_admin %{access: %{cancel_jobs: true, retry_jobs: true, delete_jobs: true}, user: nil}
-  @actor_readonly %{access: %{cancel_jobs: false, retry_jobs: false, delete_jobs: false}, user: nil}
+  @actor_readonly %{
+    access: %{cancel_jobs: false, retry_jobs: false, delete_jobs: false},
+    user: nil
+  }
 
   setup do
     ObanUI.Config.put(
@@ -87,7 +90,9 @@ defmodule ObanUI.Jobs.BulkTest do
       %{oban_name: oban_name}
     end
 
-    test "sync cancel marks matching jobs as cancelled via Oban.cancel_job", %{oban_name: oban_name} do
+    test "sync cancel marks matching jobs as cancelled via Oban.cancel_job", %{
+      oban_name: oban_name
+    } do
       ids = for _ <- 1..3, do: insert!(%{state: "available"}).id
 
       assert {:ok, :sync, 3} =

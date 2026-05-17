@@ -100,7 +100,11 @@ defmodule Mix.Tasks.ObanUi.Diagnose do
   defp check_config(io) do
     case fetch_config() do
       {:ok, %Config{} = config} ->
-        ok(io, "config", "ObanUI supervisor running with #{length(config.oban_names)} instance(s)")
+        ok(
+          io,
+          "config",
+          "ObanUI supervisor running with #{length(config.oban_names)} instance(s)"
+        )
 
       {:error, reason} ->
         fail(io, "config", """
@@ -171,7 +175,11 @@ defmodule Mix.Tasks.ObanUi.Diagnose do
               """)
           catch
             kind, reason ->
-              warn(io, "notifier", "Notifier on #{inspect(name)} unhealthy: #{inspect({kind, reason})}")
+              warn(
+                io,
+                "notifier",
+                "Notifier on #{inspect(name)} unhealthy: #{inspect({kind, reason})}"
+              )
           end
         end)
         |> aggregate("notifier")

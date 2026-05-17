@@ -17,7 +17,9 @@ defmodule ObanUI.Stats.PersistorTest do
 
     # Create the metrics table for this test transaction so we can exercise
     # the real INSERT path against a host whose migration isn't installed.
-    Ecto.Migration.SchemaMigration  # warm the module
+    # warm the module
+    Ecto.Migration.SchemaMigration
+
     ObanUI.DevApp.Repo.query!("""
       CREATE TABLE IF NOT EXISTS oban_ui_metrics (
         oban_name varchar NOT NULL,

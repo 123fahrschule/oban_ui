@@ -8,7 +8,10 @@ defmodule ObanUI.NotifierTest do
       assert Notifier.topic({:overview, :default_oban}) == "oban_ui:overview:default_oban"
       assert Notifier.topic({:queues, :default_oban}) == "oban_ui:queues:default_oban"
       assert Notifier.topic({:jobs, :default_oban}) == "oban_ui:jobs:default_oban"
-      assert Notifier.topic({:queue, :default_oban, "media"}) == "oban_ui:queue:default_oban:media"
+
+      assert Notifier.topic({:queue, :default_oban, "media"}) ==
+               "oban_ui:queue:default_oban:media"
+
       assert Notifier.topic({:job, :default_oban, 123}) == "oban_ui:job:default_oban:123"
     end
   end

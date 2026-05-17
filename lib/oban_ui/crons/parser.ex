@@ -47,7 +47,8 @@ defmodule ObanUI.Crons.Parser do
              {:ok, day} <- field(d, 1..31),
              {:ok, month} <- field(mo, 1..12),
              {:ok, weekday} <- field(w, 0..6) do
-          {:ok, %Spec{minute: minute, hour: hour, day: day, month: month, weekday: weekday, raw: expr}}
+          {:ok,
+           %Spec{minute: minute, hour: hour, day: day, month: month, weekday: weekday, raw: expr}}
         end
 
       _ ->

@@ -6,7 +6,8 @@
     <meta name="csrf-token" content={Plug.CSRFProtection.get_csrf_token()} />
     <title>{assigns[:page_title] || "Oban UI"}</title>
     <link rel="stylesheet" href={css_url(assigns[:base_path])} nonce={assigns[:csp_nonce]} />
-    <script defer src={js_url(assigns[:base_path])} nonce={assigns[:csp_nonce]}></script>
+    <script defer src={js_url(assigns[:base_path])} nonce={assigns[:csp_nonce]}>
+    </script>
   </head>
   <body class="oban-ui-root">
     <div
@@ -15,8 +16,7 @@
       role="status"
       aria-live="polite"
     >
-      <span aria-hidden="true">⚠</span>
-      Reconnecting to server…
+      <span aria-hidden="true">⚠</span> Reconnecting to server…
     </div>
 
     <a

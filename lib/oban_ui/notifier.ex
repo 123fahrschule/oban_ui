@@ -67,7 +67,7 @@ defmodule ObanUI.Notifier do
   @spec flush(instance()) :: :ok
   def flush(oban_name), do: GenServer.cast(name_for(oban_name), :flush)
 
-  @impl true
+  @impl GenServer
   def init(opts) do
     oban_name = Keyword.fetch!(opts, :oban_name)
     pubsub = Keyword.fetch!(opts, :pubsub)
@@ -88,7 +88,7 @@ defmodule ObanUI.Notifier do
      }}
   end
 
-  @impl true
+  @impl GenServer
   def handle_info({:notification, channel, payload}, state) do
     {:noreply, ingest(state, channel, payload)}
   end
@@ -103,7 +103,7 @@ defmodule ObanUI.Notifier do
 
   def handle_info(_other, state), do: {:noreply, state}
 
-  @impl true
+  @impl GenServer
   def handle_cast(:flush, state), do: {:noreply, do_flush(state)}
 
   defp ingest(state, :insert, %{"queue" => queue}) when is_binary(queue) do
@@ -117,7 +117,8 @@ defmodule ObanUI.Notifier do
     state
   end
 
-  defp ingest(state, :signal, %{"action" => action} = payload) when action in ~w(pkill scale resume pause) do
+  defp ingest(state, :signal, %{"action" => action} = payload)
+       when action in ~w(pkill scale resume pause) do
     queue = payload["queue"]
     state = if queue, do: Map.update!(state, :queues, &MapSet.put(&1, queue)), else: state
     Map.update!(state, :buffer, fn buf -> Map.update(buf, :signals, 1, &(&1 + 1)) end)
@@ -147,16 +148,14 @@ defmodule ObanUI.Notifier do
   defp schedule_flush(interval), do: Process.send_after(self(), :flush, interval)
 
   defp safe_listen(oban_name) do
-    try do
-      Oban.Notifier.listen(oban_name, [:insert, :leader, :signal])
-    catch
-      kind, reason ->
-        Logger.warning(
-          "ObanUI.Notifier could not subscribe to Oban #{inspect(oban_name)}: " <>
-            Exception.format(kind, reason)
-        )
+    Oban.Notifier.listen(oban_name, [:insert, :leader, :signal])
+  catch
+    kind, reason ->
+      Logger.warning(
+        "ObanUI.Notifier could not subscribe to Oban #{inspect(oban_name)}: " <>
+          Exception.format(kind, reason)
+      )
 
-        :ok
-    end
+      :ok
   end
 end

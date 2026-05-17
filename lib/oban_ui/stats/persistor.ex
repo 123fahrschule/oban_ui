@@ -32,7 +32,7 @@ defmodule ObanUI.Stats.Persistor do
   @doc "Force a flush. Used by tests."
   def flush_now, do: GenServer.call(__MODULE__, :flush_now, 30_000)
 
-  @impl true
+  @impl GenServer
   def init(opts) do
     interval = Keyword.get(opts, :interval, @tick_ms)
     Process.send_after(self(), :hydrate, 0)
@@ -40,7 +40,7 @@ defmodule ObanUI.Stats.Persistor do
     {:ok, %{interval: interval}}
   end
 
-  @impl true
+  @impl GenServer
   def handle_info(:hydrate, state) do
     case hydrate() do
       {:ok, count} -> Logger.info("ObanUI.Stats hydrated #{count} buckets from oban_ui_metrics")
@@ -60,7 +60,7 @@ defmodule ObanUI.Stats.Persistor do
     {:noreply, state}
   end
 
-  @impl true
+  @impl GenServer
   def handle_call(:flush_now, _from, state) do
     result = flush()
     {:reply, result, state}
@@ -108,8 +108,7 @@ defmodule ObanUI.Stats.Persistor do
       try do
         {n, _} =
           repo.insert_all("oban_ui_metrics", chunk,
-            on_conflict:
-              {:replace, [:count, :total_duration_ms]},
+            on_conflict: {:replace, [:count, :total_duration_ms]},
             conflict_target: [:oban_name, :bucket, :queue, :worker, :outcome]
           )
 

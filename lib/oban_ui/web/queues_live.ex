@@ -26,10 +26,12 @@ defmodule ObanUI.Web.QueuesLive do
 
   @refresh_ms 3_000
 
-  @impl true
+  @impl Phoenix.LiveView
   def mount(_params, _session, socket) do
     if connected?(socket) do
-      :ok = Phoenix.PubSub.subscribe(pubsub(), Notifier.topic({:queues, socket.assigns.active_oban}))
+      :ok =
+        Phoenix.PubSub.subscribe(pubsub(), Notifier.topic({:queues, socket.assigns.active_oban}))
+
       Process.send_after(self(), :refresh, @refresh_ms)
     end
 
@@ -44,13 +46,13 @@ defmodule ObanUI.Web.QueuesLive do
      |> load()}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_params(params, _uri, socket) do
     socket = assign(socket, :selected, params["name"])
     {:noreply, maybe_load_detail(socket)}
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_info({:tick, _buf}, socket), do: {:noreply, load(socket) |> maybe_load_detail()}
 
   def handle_info(:refresh, socket) do
@@ -60,7 +62,7 @@ defmodule ObanUI.Web.QueuesLive do
 
   def handle_info(_, socket), do: {:noreply, socket}
 
-  @impl true
+  @impl Phoenix.LiveView
   def handle_event("toggle_local", %{"value" => v}, socket) do
     {:noreply, assign(socket, :local_only, v == "true" or v == "on")}
   end
@@ -97,8 +99,11 @@ defmodule ObanUI.Web.QueuesLive do
 
   def handle_event("switch_instance", %{"value" => name}, socket) do
     case Enum.find(socket.assigns.oban_names, &(to_string(&1) == name)) do
-      nil -> {:noreply, socket}
-      atom -> {:noreply, push_navigate(socket, to: "#{socket.assigns.base_path}/i/#{atom}/queues")}
+      nil ->
+        {:noreply, socket}
+
+      atom ->
+        {:noreply, push_navigate(socket, to: "#{socket.assigns.base_path}/i/#{atom}/queues")}
     end
   end
 
@@ -163,7 +168,7 @@ defmodule ObanUI.Web.QueuesLive do
     _, _ -> default
   end
 
-  @impl true
+  @impl Phoenix.LiveView
   def render(assigns) do
     ~H"""
     <.shell
@@ -174,7 +179,13 @@ defmodule ObanUI.Web.QueuesLive do
       user_display={@user_display}
     >
       <%= if @live_action == :show and @detail do %>
-        <.detail_view detail={@detail} throughput={@detail_throughput} access={@access} base_path={@base_path} local_only={@local_only} />
+        <.detail_view
+          detail={@detail}
+          throughput={@detail_throughput}
+          access={@access}
+          base_path={@base_path}
+          local_only={@local_only}
+        />
       <% else %>
         <.index_view
           summaries={@summaries}
@@ -210,8 +221,7 @@ defmodule ObanUI.Web.QueuesLive do
             checked={@local_only}
             phx-click="toggle_local"
             phx-value-value={!@local_only}
-          />
-          local-only
+          /> local-only
         </label>
       </:actions>
     </.page_header>
@@ -219,8 +229,7 @@ defmodule ObanUI.Web.QueuesLive do
     <.flash_bar flash={@flash} />
 
     <EmptyState.render :if={@summaries == []} title="No queues yet." class="mb-4">
-      Configure queues in your Oban supervisor child spec, e.g.
-      <code class="font-mono">queues: [default: 10, mailers: 2]</code>.
+      Configure queues in your Oban supervisor child spec, e.g. <code class="font-mono">queues: [default: 10, mailers: 2]</code>.
     </EmptyState.render>
 
     <div :if={@summaries != []} class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -286,7 +295,9 @@ defmodule ObanUI.Web.QueuesLive do
             phx-click="stop"
             phx-value-queue={q.name}
             data-confirm={"Stop queue #{q.name}? Running jobs will drain."}
-          >Stop</.button>
+          >
+            Stop
+          </.button>
         </div>
       </.card>
     </div>
@@ -310,8 +321,7 @@ defmodule ObanUI.Web.QueuesLive do
             checked={@local_only}
             phx-click="toggle_local"
             phx-value-value={!@local_only}
-          />
-          local-only
+          /> local-only
         </label>
       </:actions>
     </.page_header>
@@ -320,7 +330,9 @@ defmodule ObanUI.Web.QueuesLive do
       <.card class="lg:col-span-2">
         <p class="text-sm font-medium mb-2">Throughput — last 30 min</p>
         <.sparkline data={@throughput} class="h-16 w-full block text-oban-500" />
-        <p :if={@throughput == []} class="text-xs text-slate-500 mt-1">No completions recorded yet.</p>
+        <p :if={@throughput == []} class="text-xs text-slate-500 mt-1">
+          No completions recorded yet.
+        </p>
       </.card>
 
       <.card>
@@ -349,7 +361,7 @@ defmodule ObanUI.Web.QueuesLive do
       </ul>
     </.card>
 
-    <.card class="mb-4" :if={@detail.leader}>
+    <.card :if={@detail.leader} class="mb-4">
       <p class="text-sm font-medium mb-2">Leader</p>
       <ul class="text-xs space-y-1">
         <li>Node: <span class="font-mono">{@detail.leader.leader}</span></li>
@@ -364,7 +376,9 @@ defmodule ObanUI.Web.QueuesLive do
         can?={@access.pause_queues}
         phx-click={if @detail.summary.paused, do: "resume", else: "pause"}
         phx-value-queue={@detail.summary.name}
-      >{if @detail.summary.paused, do: "Resume", else: "Pause"}</.button>
+      >
+        {if @detail.summary.paused, do: "Resume", else: "Pause"}
+      </.button>
 
       <form phx-submit="scale" class="flex items-center gap-1">
         <input type="hidden" name="queue" value={@detail.summary.name} />
@@ -384,7 +398,9 @@ defmodule ObanUI.Web.QueuesLive do
         phx-click="stop"
         phx-value-queue={@detail.summary.name}
         data-confirm={"Stop queue #{@detail.summary.name}? Running jobs will drain."}
-      >Stop</.button>
+      >
+        Stop
+      </.button>
     </div>
     """
   end

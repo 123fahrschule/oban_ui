@@ -26,7 +26,7 @@ defmodule ObanUI.Stats.Pruner do
 
   def start_link(opts), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
 
-  @impl true
+  @impl GenServer
   def init(opts) do
     interval = Keyword.get(opts, :interval, @tick_ms)
     db_interval = Keyword.get(opts, :db_prune_interval, @db_tick_ms)
@@ -43,7 +43,7 @@ defmodule ObanUI.Stats.Pruner do
      }}
   end
 
-  @impl true
+  @impl GenServer
   def handle_info(:prune, state) do
     prune_now()
     Process.send_after(self(), :prune, state.interval)

@@ -25,14 +25,14 @@ defmodule ObanUI.Stats.Recorder do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
-  @impl true
+  @impl GenServer
   def init(_opts) do
     ensure_table()
     attach_telemetry()
     {:ok, %{}}
   end
 
-  @impl true
+  @impl GenServer
   def terminate(_reason, _state) do
     :telemetry.detach(@handler_id)
     :ok

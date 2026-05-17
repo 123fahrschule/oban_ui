@@ -108,7 +108,13 @@ defmodule ObanUI.Web.Components.Core do
     assigns = assign(assigns, :series, series)
 
     ~H"""
-    <span class={@class} phx-hook="Sparkline" data-series={@series} id={"sl-#{System.unique_integer([:positive])}"}></span>
+    <span
+      class={@class}
+      phx-hook="Sparkline"
+      data-series={@series}
+      id={"sl-#{System.unique_integer([:positive])}"}
+    >
+    </span>
     """
   end
 

@@ -56,26 +56,24 @@ defmodule ObanUI.Jobs.Bulk do
   def run(actor, action, filters, opts \\ []) when action in @actions do
     capability = capability_for(action)
 
-    cond do
-      not Map.get(actor.access, capability, false) ->
-        {:error, :forbidden}
+    if Map.get(actor.access, capability, false) do
+      oban = Config.oban!(opts[:oban_name])
+      threshold = opts[:sync_threshold] || @sync_threshold
+      force_async = Keyword.get(opts, :async, false)
+      affected = count(filters)
 
-      true ->
-        oban = Config.oban!(opts[:oban_name])
-        threshold = opts[:sync_threshold] || @sync_threshold
-        force_async = Keyword.get(opts, :async, false)
-        affected = count(filters)
+      cond do
+        force_async or affected > threshold ->
+          enqueue_async(actor, action, filters, oban, affected)
 
-        cond do
-          force_async or affected > threshold ->
-            enqueue_async(actor, action, filters, oban, affected)
+        affected == 0 ->
+          {:ok, :sync, 0}
 
-          affected == 0 ->
-            {:ok, :sync, 0}
-
-          true ->
-            run_sync(actor, action, filters, oban, affected)
-        end
+        true ->
+          run_sync(actor, action, filters, oban, affected)
+      end
+    else
+      {:error, :forbidden}
     end
   end
 
@@ -99,7 +97,11 @@ defmodule ObanUI.Jobs.Bulk do
   end
 
   defp run_sync(actor, action, filters, oban, affected) do
-    ids = JobsQuery.list(filters, page_size: affected, sort: {:id, :asc}) |> elem(0) |> Enum.map(& &1.id)
+    ids =
+      JobsQuery.list(filters, page_size: affected, sort: {:id, :asc})
+      |> elem(0)
+      |> Enum.map(& &1.id)
+
     perform_chunk(action, ids, oban, actor)
 
     Audit.record(:"bulk_#{action}_jobs", %{
@@ -144,9 +146,7 @@ defmodule ObanUI.Jobs.Bulk do
   defp delete_ids(ids, _oban_name) do
     repo = Config.repo()
 
-    repo.delete_all(
-      from j in Oban.Job, where: j.id in ^ids and j.state != "executing"
-    )
+    repo.delete_all(from j in Oban.Job, where: j.id in ^ids and j.state != "executing")
 
     :ok
   end
@@ -180,14 +180,30 @@ defmodule ObanUI.Jobs.Bulk do
   @spec deserialise_filters(map()) :: JobsQuery.filter()
   def deserialise_filters(map) do
     Enum.reduce(map, %{}, fn
-      {"states", v}, acc -> Map.put(acc, :states, v)
-      {"queues", v}, acc -> Map.put(acc, :queues, v)
-      {"workers", v}, acc -> Map.put(acc, :workers, v)
-      {"tags", v}, acc -> Map.put(acc, :tags, v)
-      {"priorities", v}, acc -> Map.put(acc, :priorities, v)
-      {"nodes", v}, acc -> Map.put(acc, :nodes, v)
-      {"ids", v}, acc -> Map.put(acc, :ids, v)
-      {"search", v}, acc -> Map.put(acc, :search, v)
+      {"states", v}, acc ->
+        Map.put(acc, :states, v)
+
+      {"queues", v}, acc ->
+        Map.put(acc, :queues, v)
+
+      {"workers", v}, acc ->
+        Map.put(acc, :workers, v)
+
+      {"tags", v}, acc ->
+        Map.put(acc, :tags, v)
+
+      {"priorities", v}, acc ->
+        Map.put(acc, :priorities, v)
+
+      {"nodes", v}, acc ->
+        Map.put(acc, :nodes, v)
+
+      {"ids", v}, acc ->
+        Map.put(acc, :ids, v)
+
+      {"search", v}, acc ->
+        Map.put(acc, :search, v)
+
       {"inserted_after", v}, acc when is_binary(v) ->
         case DateTime.from_iso8601(v) do
           {:ok, dt, _} -> Map.put(acc, :inserted_after, dt)

@@ -14,7 +14,8 @@ defmodule ObanUI.Queues do
     with :ok <- check(actor, :pause_queues),
          oban <- Config.oban!(opts[:oban_name]),
          queue_atom <- to_atom(queue),
-         {:ok, result} <- safe(fn -> Oban.pause_queue(oban, [queue: queue_atom] ++ scope(opts)) end) do
+         {:ok, result} <-
+           safe(fn -> Oban.pause_queue(oban, [queue: queue_atom] ++ scope(opts)) end) do
       audit(actor, :pause_queue, oban, %{queue: queue, local_only: opts[:local_only] || false})
       result
     end
@@ -26,7 +27,8 @@ defmodule ObanUI.Queues do
     with :ok <- check(actor, :pause_queues),
          oban <- Config.oban!(opts[:oban_name]),
          queue_atom <- to_atom(queue),
-         {:ok, result} <- safe(fn -> Oban.resume_queue(oban, [queue: queue_atom] ++ scope(opts)) end) do
+         {:ok, result} <-
+           safe(fn -> Oban.resume_queue(oban, [queue: queue_atom] ++ scope(opts)) end) do
       audit(actor, :resume_queue, oban, %{queue: queue, local_only: opts[:local_only] || false})
       result
     end
@@ -57,7 +59,8 @@ defmodule ObanUI.Queues do
     with :ok <- check(actor, :pause_queues),
          oban <- Config.oban!(opts[:oban_name]),
          queue_atom <- to_atom(queue),
-         {:ok, result} <- safe(fn -> Oban.stop_queue(oban, [queue: queue_atom] ++ scope(opts)) end) do
+         {:ok, result} <-
+           safe(fn -> Oban.stop_queue(oban, [queue: queue_atom] ++ scope(opts)) end) do
       audit(actor, :stop_queue, oban, %{queue: queue, local_only: opts[:local_only] || false})
       result
     end
@@ -73,13 +76,11 @@ defmodule ObanUI.Queues do
   defp scope(opts), do: if(opts[:local_only], do: [local_only: true], else: [])
 
   defp safe(fun) do
-    try do
-      {:ok, fun.()}
-    rescue
-      error -> {:error, error}
-    catch
-      kind, reason -> {:error, {kind, reason}}
-    end
+    {:ok, fun.()}
+  rescue
+    error -> {:error, error}
+  catch
+    kind, reason -> {:error, {kind, reason}}
   end
 
   defp audit(%{user: user}, action, oban, extra) do

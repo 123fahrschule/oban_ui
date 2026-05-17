@@ -24,7 +24,9 @@ defmodule ObanUI.Jobs.EditTest do
 
   test "rejects non-editable states" do
     job = insert!(%{state: "executing"})
-    assert {:error, {:not_editable_state, "executing"}} = Edit.update(@admin, job, %{"priority" => "2"})
+
+    assert {:error, {:not_editable_state, "executing"}} =
+             Edit.update(@admin, job, %{"priority" => "2"})
   end
 
   test "updates priority, tags, max_attempts, scheduled_at" do

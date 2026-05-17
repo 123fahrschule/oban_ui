@@ -58,7 +58,7 @@ defmodule ObanUI.Web.Components.Combobox do
         spellcheck="false"
         phx-debounce="250"
         aria-autocomplete="list"
-        aria-expanded={@suggestions != [] && "true" || "false"}
+        aria-expanded={(@suggestions != [] && "true") || "false"}
         aria-controls={"combobox-list-" <> @field}
       />
       <ul

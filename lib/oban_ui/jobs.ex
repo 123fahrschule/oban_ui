@@ -54,13 +54,11 @@ defmodule ObanUI.Jobs do
   defp id_of(id) when is_integer(id), do: id
 
   defp safe(fun) do
-    try do
-      {:ok, fun.()}
-    rescue
-      error -> {:error, error}
-    catch
-      kind, reason -> {:error, {kind, reason}}
-    end
+    {:ok, fun.()}
+  rescue
+    error -> {:error, error}
+  catch
+    kind, reason -> {:error, {kind, reason}}
   end
 
   defp audit(%{user: user}, action, oban, extra) do

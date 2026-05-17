@@ -87,11 +87,9 @@ defmodule ObanUI.Web.OnMount do
   end
 
   defp safe_to_atom(name) when is_binary(name) do
-    try do
-      String.to_existing_atom(name)
-    rescue
-      ArgumentError -> :__unknown__
-    end
+    String.to_existing_atom(name)
+  rescue
+    ArgumentError -> :__unknown__
   end
 
   defp runtime_oban_names do

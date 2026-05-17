@@ -30,7 +30,14 @@ defmodule ObanUI.Diagnostics do
 
   require Logger
 
-  @info_keys [:status, :memory, :message_queue_len, :reductions, :current_stacktrace, :current_function]
+  @info_keys [
+    :status,
+    :memory,
+    :message_queue_len,
+    :reductions,
+    :current_stacktrace,
+    :current_function
+  ]
 
   @type info :: %{
           available: boolean(),
@@ -91,7 +98,8 @@ defmodule ObanUI.Diagnostics do
           nil ->
             %{
               available: false,
-              reason: "No running executor for job #{job.id} on this node — finished or migrated.",
+              reason:
+                "No running executor for job #{job.id} on this node — finished or migrated.",
               node: node()
             }
 

@@ -35,11 +35,20 @@ defmodule ObanUI.DevApp.Seeds do
         Enum.map(1..40, fn i ->
           {worker, args, state, queue} =
             case rem(i, 5) do
-              0 -> {"ObanUI.DevApp.NoopWorker", %{"n" => i}, "completed", "default"}
-              1 -> {"ObanUI.DevApp.NoopWorker", %{"n" => i, "sleep" => 50}, "available", "default"}
-              2 -> {"ObanUI.DevApp.FlakyWorker", %{"n" => i, "fail" => true}, "retryable", "mailers"}
-              3 -> {"ObanUI.DevApp.NoopWorker", %{"n" => i}, "scheduled", "media"}
-              4 -> {"ObanUI.DevApp.FlakyWorker", %{"n" => i, "fail" => true}, "discarded", "mailers"}
+              0 ->
+                {"ObanUI.DevApp.NoopWorker", %{"n" => i}, "completed", "default"}
+
+              1 ->
+                {"ObanUI.DevApp.NoopWorker", %{"n" => i, "sleep" => 50}, "available", "default"}
+
+              2 ->
+                {"ObanUI.DevApp.FlakyWorker", %{"n" => i, "fail" => true}, "retryable", "mailers"}
+
+              3 ->
+                {"ObanUI.DevApp.NoopWorker", %{"n" => i}, "scheduled", "media"}
+
+              4 ->
+                {"ObanUI.DevApp.FlakyWorker", %{"n" => i, "fail" => true}, "discarded", "mailers"}
             end
 
           inserted = DateTime.add(now, -i, :minute)
@@ -63,7 +72,13 @@ defmodule ObanUI.DevApp.Seeds do
             tags: ["seed", "demo-#{rem(i, 3)}"],
             errors:
               if state in ~w(retryable discarded) do
-                [%{at: DateTime.to_iso8601(attempted || now), attempt: 1, error: "** (RuntimeError) boom"}]
+                [
+                  %{
+                    at: DateTime.to_iso8601(attempted || now),
+                    attempt: 1,
+                    error: "** (RuntimeError) boom"
+                  }
+                ]
               else
                 []
               end,

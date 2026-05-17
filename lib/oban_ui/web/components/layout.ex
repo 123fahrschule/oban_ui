@@ -53,7 +53,9 @@ defmodule ObanUI.Web.Components.Layout do
             <span
               :if={@user_display && @user_display.name not in [nil, "", "anonymous"]}
               class="text-slate-500"
-            >{@user_display.name}</span>
+            >
+              {@user_display.name}
+            </span>
           </div>
           <div class="flex items-center gap-2">
             <.theme_toggle />
