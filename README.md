@@ -133,15 +133,15 @@ end
 
 Recognised capabilities:
 
-| Action | Effect when disabled |
-|---|---|
-| `cancel_jobs` | Cancel buttons render disabled with a tooltip |
-| `retry_jobs` | Same for retry |
-| `delete_jobs` | Same for destructive bulk + per-row delete |
-| `pause_queues` | Pause / resume / stop disabled |
-| `scale_queues` | Concurrency form disabled |
-| `edit_jobs` | Edit button in the detail drawer disabled |
-| `insert_jobs` | Reserved for a future "new job" form |
+| Action         | Effect when disabled                          |
+| -------------- | --------------------------------------------- |
+| `cancel_jobs`  | Cancel buttons render disabled with a tooltip |
+| `retry_jobs`   | Same for retry                                |
+| `delete_jobs`  | Same for destructive bulk + per-row delete    |
+| `pause_queues` | Pause / resume / stop disabled                |
+| `scale_queues` | Concurrency form disabled                     |
+| `edit_jobs`    | Edit button in the detail drawer disabled     |
+| `insert_jobs`  | Reserved for a future "new job" form          |
 
 Server-side checks run on every action regardless of the rendered UI, so
 forging requests with the dev console doesn't bypass them.
@@ -238,13 +238,13 @@ mix assets.build
 
 ## Out of scope
 
-| Feature | Why |
-|---|---|
-| Workflows graph | Requires `Oban.Pro.Workflow` and its meta layout |
-| DynamicCron editor | Requires `Oban.Pro.Plugins.DynamicCron` |
-| Recorded outputs | Requires `Oban.Pro.Worker` |
-| Live process diagnostics | Pro-only feature in `oban_web` |
-| Smart-engine introspection | Smart engine is Pro |
+| Feature                    | Why                                              |
+| -------------------------- | ------------------------------------------------ |
+| Workflows graph            | Requires `Oban.Pro.Workflow` and its meta layout |
+| DynamicCron editor         | Requires `Oban.Pro.Plugins.DynamicCron`          |
+| Recorded outputs           | Requires `Oban.Pro.Worker`                       |
+| Live process diagnostics   | Pro-only feature in `oban_web`                   |
+| Smart-engine introspection | Smart engine is Pro                              |
 
 If you have an Oban Pro licence, `oban_web` covers these. ObanUI focuses
 on giving the open-source half a UI that doesn't feel cut down.
