@@ -35,34 +35,33 @@ defmodule ObanUI.Web.Components.Chart do
 
   def render(assigns) do
     series = Enum.map(assigns.series, &normalise_series/1)
-    values = if assigns.stacked, do: stack_series(series), else: series
-
-    max_y =
-      values
-      |> Enum.flat_map(& &1.values)
-      |> Enum.max(fn -> 1 end)
-      |> max(1)
-
-    n_points = values |> Enum.map(&length(&1.values)) |> Enum.max(fn -> 0 end)
 
     plot_w = @width - @padding_left - @padding_right
     plot_h = assigns.height - @padding_top - @padding_bottom
-
+    n_points = series |> Enum.map(&length(&1.values)) |> Enum.max(fn -> 0 end)
     step = if n_points > 1, do: plot_w / (n_points - 1), else: 0
 
-    paths =
-      Enum.map(values, fn s ->
-        points =
-          s.values
-          |> Enum.with_index()
-          |> Enum.map(fn {y, i} ->
-            x = @padding_left + i * step
-            y_pix = @padding_top + plot_h - y / max_y * plot_h
-            "#{Float.round(x, 1)},#{Float.round(y_pix, 1)}"
-          end)
-          |> Enum.join(" ")
+    {bands, max_y} =
+      if assigns.stacked do
+        build_stacked_bands(series, n_points)
+      else
+        build_line_bands(series)
+      end
 
-        Map.put(s, :points, points)
+    # Convert each band's value-lists into pixel polylines/polygons. A band's
+    # polygon goes forward along its upper boundary then back along its lower
+    # boundary, producing a non-overlapping slice — so the fills tile cleanly
+    # instead of three translucent layers blending into mud.
+    rendered =
+      Enum.map(bands, fn band ->
+        upper = to_points(band.upper, max_y, step, plot_h)
+        lower = if band.lower, do: to_points(band.lower, max_y, step, plot_h), else: nil
+
+        %{
+          color: band.color,
+          polygon: lower && polygon_str(upper, lower),
+          line: line_str(upper)
+        }
       end)
 
     grid_y =
@@ -73,7 +72,7 @@ defmodule ObanUI.Web.Components.Chart do
 
     assigns =
       assigns
-      |> assign(:paths, paths)
+      |> assign(:bands, rendered)
       |> assign(:grid_y, grid_y)
       |> assign(:width, @width)
       |> assign(:padding_left, @padding_left)
@@ -110,15 +109,16 @@ defmodule ObanUI.Web.Components.Chart do
           </text>
         </g>
 
-        <%!-- Series --%>
-        <g :for={s <- @paths}>
-          <polyline
-            fill={if @stacked, do: s.color, else: "none"}
-            fill-opacity={if @stacked, do: "0.25", else: "0"}
-            stroke={s.color}
-            stroke-width="1.8"
-            points={s.points}
+        <%!-- Series: filled band (stacked) + boundary line --%>
+        <g :for={band <- @bands}>
+          <polygon
+            :if={band.polygon}
+            points={band.polygon}
+            fill={band.color}
+            fill-opacity="0.7"
+            stroke="none"
           />
+          <polyline points={band.line} fill="none" stroke={band.color} stroke-width="1.5" />
         </g>
 
         <%!-- X axis line --%>
@@ -178,22 +178,55 @@ defmodule ObanUI.Web.Components.Chart do
 
   defp normalise_series(s), do: Map.merge(%{values: [], color: "#3b82f6", label: "series"}, s)
 
-  defp stack_series(series) do
-    {stacked, _} =
-      Enum.map_reduce(series, nil, fn s, acc ->
-        new_values =
-          case acc do
-            nil ->
-              s.values
+  # Stacked mode: each band's lower boundary is the running cumulative of all
+  # series below it, its upper boundary is that cumulative plus this series.
+  # max_y is the top of the highest cumulative (the total). Returns
+  # {bands, max_y} where each band has %{color, lower, upper}.
+  defp build_stacked_bands(series, n_points) do
+    zeros = List.duplicate(0, n_points)
 
-            prev ->
-              Enum.zip_with([prev, s.values], fn xs -> Enum.sum(xs) end)
-          end
-
-        {Map.put(s, :values, new_values), new_values}
+    {bands, top} =
+      Enum.map_reduce(series, zeros, fn s, lower ->
+        vals = pad(s.values, n_points)
+        upper = Enum.zip_with([lower, vals], &Enum.sum/1)
+        {%{color: s.color, lower: lower, upper: upper}, upper}
       end)
 
-    stacked
+    max_y = top |> Enum.max(fn -> 1 end) |> max(1)
+    {bands, max_y}
+  end
+
+  # Non-stacked mode: one line per series, no fill, shared max_y.
+  defp build_line_bands(series) do
+    bands = Enum.map(series, fn s -> %{color: s.color, lower: nil, upper: s.values} end)
+
+    max_y =
+      series
+      |> Enum.flat_map(& &1.values)
+      |> Enum.max(fn -> 1 end)
+      |> max(1)
+
+    {bands, max_y}
+  end
+
+  defp pad(values, n) when length(values) >= n, do: Enum.take(values, n)
+  defp pad(values, n), do: values ++ List.duplicate(0, n - length(values))
+
+  defp to_points(values, max_y, step, plot_h) do
+    values
+    |> Enum.with_index()
+    |> Enum.map(fn {y, i} ->
+      x = @padding_left + i * step
+      y_pix = @padding_top + plot_h - y / max_y * plot_h
+      {Float.round(x, 1), Float.round(y_pix, 1)}
+    end)
+  end
+
+  defp line_str(points), do: Enum.map_join(points, " ", fn {x, y} -> "#{x},#{y}" end)
+
+  defp polygon_str(upper, lower) do
+    (upper ++ Enum.reverse(lower))
+    |> Enum.map_join(" ", fn {x, y} -> "#{x},#{y}" end)
   end
 
   defp middle_label(labels) do
