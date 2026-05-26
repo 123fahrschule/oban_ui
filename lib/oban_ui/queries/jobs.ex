@@ -118,6 +118,24 @@ defmodule ObanUI.Queries.Jobs do
   end
 
   @doc """
+  Returns *all* matching job IDs in a single unbounded query. Used by the
+  bulk-action machinery, which needs the full set, not a clamped page.
+
+  Caller is responsible for not asking this for impossibly-large filters
+  — for 200k IDs the result list is around 1.6 MB which is fine, for
+  10M+ you'd want to stream instead.
+  """
+  @spec matching_ids(filter()) :: [integer()]
+  def matching_ids(filters \\ %{}) do
+    repo = Config.repo()
+
+    base_query()
+    |> apply_filters(filters)
+    |> select([j], j.id)
+    |> repo.all()
+  end
+
+  @doc """
   Returns the distinct list of queue names currently present in the DB.
   Useful for filter dropdowns.
   """

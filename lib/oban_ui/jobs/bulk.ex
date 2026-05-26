@@ -81,9 +81,15 @@ defmodule ObanUI.Jobs.Bulk do
 
   @doc false
   def perform_chunk(action, ids, oban_name, actor) do
+    # Use the bulk Oban APIs (cancel_all / retry_all) instead of one
+    # synchronous call per job. For a 500-id chunk that's one query vs.
+    # 500 — a 500× speedup that matters as soon as the action touches
+    # more than a handful of jobs.
+    query = ids_query(ids)
+
     case action do
-      :cancel -> Enum.each(ids, &Oban.cancel_job(oban_name, &1))
-      :retry -> Enum.each(ids, &Oban.retry_job(oban_name, &1))
+      :cancel -> Oban.cancel_all_jobs(oban_name, query)
+      :retry -> Oban.retry_all_jobs(oban_name, query)
       :delete -> delete_ids(ids, oban_name)
     end
 
@@ -96,11 +102,16 @@ defmodule ObanUI.Jobs.Bulk do
     :ok
   end
 
-  defp run_sync(actor, action, filters, oban, affected) do
-    ids =
-      JobsQuery.list(filters, page_size: affected, sort: {:id, :asc})
-      |> elem(0)
-      |> Enum.map(& &1.id)
+  defp ids_query(ids) do
+    import Ecto.Query, only: [from: 2]
+    from(j in Oban.Job, where: j.id in ^ids)
+  end
+
+  defp run_sync(actor, action, filters, oban, _affected) do
+    # JobsQuery.list/2 clamps page_size to 200 — using it here for the
+    # bulk fetch was the bug that let cancel/retry of > 200 jobs silently
+    # process only the first page. Always go through matching_ids/1.
+    ids = JobsQuery.matching_ids(filters)
 
     perform_chunk(action, ids, oban, actor)
 

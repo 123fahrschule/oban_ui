@@ -51,8 +51,10 @@ defmodule ObanUI.Jobs.BulkWorker do
   end
 
   defp collect_ids(filters) do
-    {jobs, _meta} = JobsQuery.list(filters, page_size: 1_000_000, sort: {:id, :asc})
-    Enum.map(jobs, & &1.id)
+    # Must NOT use JobsQuery.list/2: it clamps page_size to 200 and would
+    # silently truncate the bulk set. matching_ids/1 runs an unbounded
+    # SELECT id query so we see every match.
+    JobsQuery.matching_ids(filters)
   end
 
   defp broadcast(ref, msg) do

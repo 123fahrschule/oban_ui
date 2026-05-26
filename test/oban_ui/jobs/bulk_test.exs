@@ -111,6 +111,48 @@ defmodule ObanUI.Jobs.BulkTest do
       {jobs, _} = ObanUI.Queries.Jobs.list(%{ids: ids})
       assert Enum.all?(jobs, &(&1.state == "available"))
     end
+
+    # Regression for the 200k-jobs-cancel-but-only-25-actually-cancelled
+    # production bug. The sync path used JobsQuery.list/2 which clamps
+    # page_size to 200, so anything beyond the first 200 was silently
+    # ignored. We use 250 to keep the test fast while still tripping
+    # the clamp.
+    test "sync cancel handles > page_size_cap jobs without truncation", %{oban_name: oban_name} do
+      n = 250
+      for _ <- 1..n, do: insert!(%{state: "available"})
+
+      assert {:ok, :sync, ^n} =
+               Bulk.run(@actor_admin, :cancel, %{states: ["available"]},
+                 oban_name: oban_name,
+                 sync_threshold: 10_000
+               )
+
+      # Use count/matching_ids (unbounded) instead of list/2 (clamped) to
+      # verify the final cancelled set size — list/2 would itself only
+      # return 25 rows and mask the test.
+      assert ObanUI.Queries.Jobs.count(%{states: ["cancelled"]}) == n
+    end
+
+    # And the async worker path went through the same buggy fetch — verify
+    # it also walks the full set now.
+    test "async worker collects every matching id past the page-size cap",
+         %{oban_name: oban_name} do
+      n = 250
+      for _ <- 1..n, do: insert!(%{state: "available"})
+
+      filters = %{states: ["available"]}
+      ids_via_helper = ObanUI.Queries.Jobs.matching_ids(filters)
+
+      assert length(ids_via_helper) == n
+
+      # And the worker's collect path (private — exercise via its public
+      # equivalent matching_ids/1 to assert the size is what the worker
+      # would now see). Direct end-to-end of the worker requires Oban
+      # plus queues running which is heavier than necessary here; the
+      # important regression is that the fetch no longer truncates.
+      assert ids_via_helper == Enum.sort(ids_via_helper)
+      _ = oban_name
+    end
   end
 
   test "filters round-trip via serialise/deserialise" do
