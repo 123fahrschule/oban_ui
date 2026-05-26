@@ -115,8 +115,9 @@ defmodule ObanUI.Jobs.BulkTest do
     # Regression for the 200k-jobs-cancel-but-only-25-actually-cancelled
     # production bug. The sync path used JobsQuery.list/2 which clamps
     # page_size to 200, so anything beyond the first 200 was silently
-    # ignored. We use 250 to keep the test fast while still tripping
-    # the clamp.
+    # ignored. We use 250 (just above the 200 clamp) to keep the test fast
+    # while still tripping the truncation. All three bulk actions share
+    # the same fetch path, so we run all three.
     test "sync cancel handles > page_size_cap jobs without truncation", %{oban_name: oban_name} do
       n = 250
       for _ <- 1..n, do: insert!(%{state: "available"})
@@ -133,25 +134,45 @@ defmodule ObanUI.Jobs.BulkTest do
       assert ObanUI.Queries.Jobs.count(%{states: ["cancelled"]}) == n
     end
 
-    # And the async worker path went through the same buggy fetch — verify
-    # it also walks the full set now.
-    test "async worker collects every matching id past the page-size cap",
+    test "sync retry handles > page_size_cap jobs without truncation",
          %{oban_name: oban_name} do
+      n = 250
+      for _ <- 1..n, do: insert!(%{state: "discarded", attempt: 2})
+
+      assert {:ok, :sync, ^n} =
+               Bulk.run(@actor_admin, :retry, %{states: ["discarded"]},
+                 oban_name: oban_name,
+                 sync_threshold: 10_000
+               )
+
+      assert ObanUI.Queries.Jobs.count(%{states: ["available"]}) == n
+      assert ObanUI.Queries.Jobs.count(%{states: ["discarded"]}) == 0
+    end
+
+    test "sync delete handles > page_size_cap jobs without truncation",
+         %{oban_name: oban_name} do
+      n = 250
+      for _ <- 1..n, do: insert!(%{state: "discarded"})
+
+      assert {:ok, :sync, ^n} =
+               Bulk.run(@actor_admin, :delete, %{states: ["discarded"]},
+                 oban_name: oban_name,
+                 sync_threshold: 10_000
+               )
+
+      assert ObanUI.Queries.Jobs.count(%{states: ["discarded"]}) == 0
+    end
+
+    # The async worker path uses the same matching_ids/1 helper that the
+    # sync path does, so this test asserts that helper returns the full
+    # set rather than the clamped first page. Going through the real
+    # worker would require running Oban with its plugins + queues, which
+    # is heavier than the regression needs.
+    test "matching_ids/1 walks past the page-size cap", %{oban_name: _oban_name} do
       n = 250
       for _ <- 1..n, do: insert!(%{state: "available"})
 
-      filters = %{states: ["available"]}
-      ids_via_helper = ObanUI.Queries.Jobs.matching_ids(filters)
-
-      assert length(ids_via_helper) == n
-
-      # And the worker's collect path (private — exercise via its public
-      # equivalent matching_ids/1 to assert the size is what the worker
-      # would now see). Direct end-to-end of the worker requires Oban
-      # plus queues running which is heavier than necessary here; the
-      # important regression is that the fetch no longer truncates.
-      assert ids_via_helper == Enum.sort(ids_via_helper)
-      _ = oban_name
+      assert length(ObanUI.Queries.Jobs.matching_ids(%{states: ["available"]})) == n
     end
   end
 
