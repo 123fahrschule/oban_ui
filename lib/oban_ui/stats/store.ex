@@ -81,33 +81,63 @@ defmodule ObanUI.Stats.Store do
     now = Stats.current_bucket()
     start = now - seconds + bucket_size
 
+    base = build_base(start, now, bucket_size)
+
     rows =
       oban_name
       |> rows_at_or_after(start)
       |> filter_queue(queue)
 
-    base =
-      for b <- start..now//bucket_size, into: %{} do
-        {b, %{bucket: b, success: 0, failure: 0, discard: 0}}
-      end
+    merge_rows_safely(rows, base, start, now)
+  end
 
-    rows
-    |> Enum.reduce(base, fn row, acc ->
-      # Belt-and-braces: even with the snapshot fix, if a row predates the
-      # base window for any other reason we'd rather drop it than crash
-      # the LiveView. Map.update/4 inserts a zero entry on miss; we then
-      # filter rows back to the [start, now] window before returning.
-      Map.update(
-        acc,
-        row.bucket,
-        %{bucket: row.bucket, success: 0, failure: 0, discard: 0}
-        |> Map.update!(row.outcome, &(&1 + row.count)),
-        fn entry -> Map.update!(entry, row.outcome, &(&1 + row.count)) end
-      )
+  defp build_base(start, now, bucket_size) do
+    for b <- start..now//bucket_size, into: %{} do
+      {b, %{bucket: b, success: 0, failure: 0, discard: 0}}
+    end
+  end
+
+  # Folds rows into the base map. Any unexpected outcome atom or off-window
+  # bucket is dropped instead of crashing the LiveView. On a complete
+  # reducer failure we still return the zero-filled base so the Dashboard
+  # / Queues views show "no activity yet" rather than the bare empty
+  # state. The trace is logged so we can fix the underlying issue
+  # without dropping data in the meantime.
+  defp merge_rows_safely(rows, base, start, now) do
+    Enum.reduce(rows, base, fn row, acc ->
+      cond do
+        not is_integer(row[:bucket]) ->
+          acc
+
+        row.bucket < start or row.bucket > now ->
+          acc
+
+        row[:outcome] not in [:success, :failure, :discard] ->
+          acc
+
+        true ->
+          Map.update(acc, row.bucket, base_entry(row), fn entry ->
+            Map.update!(entry, row.outcome, &(&1 + row.count))
+          end)
+      end
     end)
     |> Map.values()
-    |> Enum.filter(&(&1.bucket >= start and &1.bucket <= now))
     |> Enum.sort_by(& &1.bucket)
+  rescue
+    error ->
+      require Logger
+
+      Logger.warning(
+        "ObanUI.Stats.Store.throughput reducer failed; returning base. " <>
+          Exception.format(:error, error, __STACKTRACE__)
+      )
+
+      base |> Map.values() |> Enum.sort_by(& &1.bucket)
+  end
+
+  defp base_entry(row) do
+    %{bucket: row.bucket, success: 0, failure: 0, discard: 0}
+    |> Map.put(row.outcome, row.count)
   end
 
   # Variant of rows_since/2 that takes an explicit lower bound. Caller is

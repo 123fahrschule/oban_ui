@@ -134,7 +134,10 @@ defmodule ObanUI.Web.QueuesLive do
 
     throughputs =
       Map.new(summaries, fn s ->
-        points = Stats.Store.throughput(oban, 300, queue: s.name)
+        # Wrap each per-queue throughput in safe/2 so a single bad row
+        # doesn't blank the entire queues page; the broken queue just
+        # gets an empty sparkline.
+        points = safe(fn -> Stats.Store.throughput(oban, 300, queue: s.name) end, [])
         {s.name, Enum.map(points, &(&1.success + &1.failure))}
       end)
 
@@ -148,8 +151,13 @@ defmodule ObanUI.Web.QueuesLive do
     detail = safe(fn -> QueuesQuery.detail(socket.assigns.active_oban, queue) end, nil)
 
     throughput =
-      Stats.Store.throughput(socket.assigns.active_oban, 1800, queue: queue)
-      |> Enum.map(&(&1.success + &1.failure))
+      safe(
+        fn ->
+          Stats.Store.throughput(socket.assigns.active_oban, 1800, queue: queue)
+          |> Enum.map(&(&1.success + &1.failure))
+        end,
+        []
+      )
 
     socket
     |> assign(:detail, detail)
@@ -160,12 +168,26 @@ defmodule ObanUI.Web.QueuesLive do
 
   defp pubsub, do: ObanUI.Config.fetch!().pubsub
 
+  # Same logging contract as DashboardLive's safe/2 — fail soft, log loud.
   defp safe(fun, default) do
     fun.()
   rescue
-    _ -> default
+    error ->
+      require Logger
+
+      Logger.warning(
+        "ObanUI.Web.QueuesLive widget failed; using default. " <>
+          Exception.format(:error, error, __STACKTRACE__)
+      )
+
+      default
   catch
-    _, _ -> default
+    kind, reason ->
+      require Logger
+
+      Logger.warning("ObanUI.Web.QueuesLive widget caught #{inspect(kind)} #{inspect(reason)}")
+
+      default
   end
 
   @impl Phoenix.LiveView

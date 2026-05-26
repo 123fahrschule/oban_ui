@@ -146,6 +146,15 @@ defmodule ObanUI.Web.DashboardLive do
     end)
   end
 
+  # Returns true when every series in the chart consists exclusively of
+  # zero values. Drives the "no activity yet" hint underneath the
+  # otherwise-empty flat line.
+  defp chart_all_zero?(series) when is_list(series) do
+    Enum.all?(series, fn s -> Enum.all?(s.values, &(&1 == 0)) end)
+  end
+
+  defp chart_all_zero?(_), do: true
+
   defp format_bucket(unix) do
     case DateTime.from_unix(unix) do
       {:ok, dt} -> Calendar.strftime(dt, "%H:%M")
@@ -155,12 +164,30 @@ defmodule ObanUI.Web.DashboardLive do
 
   defp pubsub, do: ObanUI.Config.fetch!().pubsub
 
+  # Wraps a stats / query call. On any failure the caller gets `default`
+  # back AND we log the stacktrace at warning level so the underlying
+  # issue is discoverable from `heroku logs --tail` instead of silently
+  # collapsing the dashboard. We swallow the error rather than re-raising
+  # because a single broken widget shouldn't take down the whole page.
   defp safe(fun, default) do
     fun.()
   rescue
-    _ -> default
+    error ->
+      require Logger
+
+      Logger.warning(
+        "ObanUI.Web.DashboardLive widget failed; using default. " <>
+          Exception.format(:error, error, __STACKTRACE__)
+      )
+
+      default
   catch
-    _, _ -> default
+    kind, reason ->
+      require Logger
+
+      Logger.warning("ObanUI.Web.DashboardLive widget caught #{inspect(kind)} #{inspect(reason)}")
+
+      default
   end
 
   @impl Phoenix.LiveView
@@ -191,15 +218,30 @@ defmodule ObanUI.Web.DashboardLive do
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <.card class="lg:col-span-2">
           <p class="text-sm font-medium mb-2">Throughput · {@range}</p>
+          <%!--
+            Render the chart whenever we have at least the zero-filled
+            timeline. A flat-line "no activity" chart is more informative
+            than a blank empty-state — it makes clear the page is wired up
+            and the recorder is alive, just nothing to show yet. The
+            empty-state only fires for the genuinely catastrophic case
+            where the throughput call itself failed.
+          --%>
           <Chart.render
             :if={@chart_series != []}
             series={@chart_series}
             labels={@chart_labels}
             stacked={true}
           />
-          <EmptyState.render :if={@chart_series == []} title="No throughput data yet.">
-            Charts populate once jobs complete or fail. If you have just enabled
-            persistence, restart your app — the dashboard will hydrate from <code class="font-mono">oban_ui_metrics</code>.
+          <p
+            :if={@chart_series != [] and chart_all_zero?(@chart_series)}
+            class="text-xs text-slate-500 mt-1"
+          >
+            No job completions yet in this window. Once jobs run, this chart fills up.
+          </p>
+          <EmptyState.render :if={@chart_series == []} title="Throughput data unavailable">
+            The throughput call raised — check the application log for the
+            stack trace. The Stats recorder might not be running, or the
+            ETS table was reset.
           </EmptyState.render>
         </.card>
 
