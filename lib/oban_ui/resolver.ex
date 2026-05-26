@@ -104,4 +104,68 @@ defmodule ObanUI.Resolver do
     do: Map.new(@actions, fn action -> {action, Keyword.get(list, action, false)} end)
 
   def normalize(_), do: normalize(:read_only)
+
+  @doc """
+  Formats job args through the resolver's `c:format_job_args/1` callback,
+  falling back to the raw args if the resolver doesn't implement it.
+
+  Uses `Code.ensure_loaded?/1` before `function_exported?/3`: the latter
+  returns `false` for a module that simply hasn't been loaded into memory
+  yet, which would silently skip the host's formatter and leak raw
+  (e.g. `__original_args`) payloads into the UI.
+  """
+  @spec format_args(module(), term()) :: term()
+  def format_args(resolver, args) do
+    if exported?(resolver, :format_job_args, 1) do
+      resolver.format_job_args(args)
+    else
+      args
+    end
+  end
+
+  @doc """
+  Like `format_args/2` but for `c:format_job_meta/1`.
+  """
+  @spec format_meta(module(), term()) :: term()
+  def format_meta(resolver, meta) do
+    if exported?(resolver, :format_job_meta, 1) do
+      resolver.format_job_meta(meta)
+    else
+      meta
+    end
+  end
+
+  @doc """
+  Formats the display user through `c:format_user/1`, falling back to the
+  default formatter.
+  """
+  @spec format_user(module(), term()) :: %{name: String.t(), email: String.t() | nil}
+  def format_user(resolver, user) do
+    if exported?(resolver, :format_user, 1) do
+      resolver.format_user(user)
+    else
+      __MODULE__.Default.format_user(user)
+    end
+  end
+
+  @doc """
+  Resolves access for `user`, defaulting to `:all` when the resolver
+  doesn't implement `c:resolve_access/1`.
+  """
+  @spec resolve_access(module(), term()) :: access()
+  def resolve_access(resolver, user) do
+    if exported?(resolver, :resolve_access, 1) do
+      resolver.resolve_access(user)
+    else
+      :all
+    end
+  end
+
+  @doc false
+  # function_exported?/3 reports false for an unloaded module. Forcing a
+  # load first means a resolver referenced only from the router macro is
+  # still found at first render.
+  def exported?(module, fun, arity) do
+    Code.ensure_loaded?(module) and function_exported?(module, fun, arity)
+  end
 end

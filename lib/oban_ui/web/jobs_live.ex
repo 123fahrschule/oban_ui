@@ -647,12 +647,7 @@ defmodule ObanUI.Web.JobsLive do
   # the host resolver's format_job_args/1. Strings are shown verbatim (after
   # newline collapsing), everything else via inspect/2.
   defp preview_args(args, resolver) do
-    rendered =
-      if function_exported?(resolver, :format_job_args, 1) do
-        resolver.format_job_args(args)
-      else
-        args
-      end
+    rendered = ObanUI.Resolver.format_args(resolver, args)
 
     text =
       case rendered do
@@ -1141,19 +1136,8 @@ defmodule ObanUI.Web.JobsLive do
   @args_preview_bytes 2_000
 
   defp detail_drawer(assigns) do
-    formatted_args =
-      if function_exported?(assigns.resolver, :format_job_args, 1) do
-        assigns.resolver.format_job_args(assigns.job.args)
-      else
-        assigns.job.args
-      end
-
-    formatted_meta =
-      if function_exported?(assigns.resolver, :format_job_meta, 1) do
-        assigns.resolver.format_job_meta(assigns.job.meta)
-      else
-        assigns.job.meta
-      end
+    formatted_args = ObanUI.Resolver.format_args(assigns.resolver, assigns.job.args)
+    formatted_meta = ObanUI.Resolver.format_meta(assigns.resolver, assigns.job.meta)
 
     editable? = assigns.job.state in Edit.editable_states()
 
