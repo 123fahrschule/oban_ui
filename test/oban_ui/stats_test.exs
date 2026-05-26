@@ -47,4 +47,26 @@ defmodule ObanUI.StatsTest do
 
     assert Stats.Store.success_rate(:test_oban, 60) == 0.8
   end
+
+  # Production crash regression: throughput/3 used to call
+  # Stats.current_bucket/0 twice — once inside rows_since and once for
+  # the zero-filled base map. If the 10s bucket clock ticked between the
+  # two reads, a row sitting at the old cutoff was returned but no key
+  # existed in base, and Map.update! crashed the LiveView with KeyError.
+  # Insert a row exactly one bucket BEFORE the window the function will
+  # build and assert it tolerates the off-by-one without crashing.
+  test "throughput tolerates a row one bucket older than the requested window" do
+    bucket_size = Stats.bucket_seconds()
+    older = Stats.current_bucket() - bucket_size * 7
+
+    key = {:test_oban, older, "default", "W", :success}
+    :ets.update_counter(Stats.table(), key, [{2, 5}, {3, 0}], {key, 0, 0})
+
+    # Window is 60s = 6 buckets; the inserted row sits at the older edge.
+    # Even if a worker tick happens to land exactly between the two
+    # current_bucket reads, this must not raise.
+    assert points = Stats.Store.throughput(:test_oban, 60)
+    assert is_list(points)
+    assert length(points) == 6
+  end
 end

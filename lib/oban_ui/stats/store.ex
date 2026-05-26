@@ -72,14 +72,19 @@ defmodule ObanUI.Stats.Store do
   def throughput(oban_name, seconds, opts \\ []) do
     queue = opts[:queue]
 
-    rows =
-      oban_name
-      |> rows_since(seconds)
-      |> filter_queue(queue)
-
+    # IMPORTANT: take a single snapshot of "now" and use it for BOTH the
+    # ETS read and the zero-filled base range. Calling Stats.current_bucket/0
+    # twice was the production KeyError — the bucket clock ticked between
+    # the two reads, so a row at the old cutoff didn't have a slot in the
+    # base map and Map.update! raised. Same snapshot here keeps them aligned.
     bucket_size = Stats.bucket_seconds()
     now = Stats.current_bucket()
     start = now - seconds + bucket_size
+
+    rows =
+      oban_name
+      |> rows_at_or_after(start)
+      |> filter_queue(queue)
 
     base =
       for b <- start..now//bucket_size, into: %{} do
@@ -88,12 +93,53 @@ defmodule ObanUI.Stats.Store do
 
     rows
     |> Enum.reduce(base, fn row, acc ->
-      Map.update!(acc, row.bucket, fn entry ->
-        Map.update!(entry, row.outcome, &(&1 + row.count))
-      end)
+      # Belt-and-braces: even with the snapshot fix, if a row predates the
+      # base window for any other reason we'd rather drop it than crash
+      # the LiveView. Map.update/4 inserts a zero entry on miss; we then
+      # filter rows back to the [start, now] window before returning.
+      Map.update(
+        acc,
+        row.bucket,
+        %{bucket: row.bucket, success: 0, failure: 0, discard: 0}
+        |> Map.update!(row.outcome, &(&1 + row.count)),
+        fn entry -> Map.update!(entry, row.outcome, &(&1 + row.count)) end
+      )
     end)
     |> Map.values()
+    |> Enum.filter(&(&1.bucket >= start and &1.bucket <= now))
     |> Enum.sort_by(& &1.bucket)
+  end
+
+  # Variant of rows_since/2 that takes an explicit lower bound. Caller is
+  # responsible for using one consistent "now" between this call and any
+  # downstream calculation.
+  defp rows_at_or_after(oban_name, lower_bucket) do
+    case :ets.whereis(Stats.table()) do
+      :undefined ->
+        []
+
+      _ ->
+        match_spec = [
+          {
+            {{:"$1", :"$2", :"$3", :"$4", :"$5"}, :"$6", :"$7"},
+            [
+              {:andalso, {:==, :"$1", oban_name}, {:>=, :"$2", lower_bucket}}
+            ],
+            [
+              %{
+                bucket: :"$2",
+                queue: :"$3",
+                worker: :"$4",
+                outcome: :"$5",
+                count: :"$6",
+                total_duration_ms: :"$7"
+              }
+            ]
+          }
+        ]
+
+        :ets.select(Stats.table(), match_spec)
+    end
   end
 
   defp filter_queue(rows, nil), do: rows
