@@ -211,6 +211,44 @@ defmodule ObanUI.Web.JobsLiveTest do
     assert html =~ ~r/<strong>3<\/strong>\s*matching job/
   end
 
+  test "custom resolver's format_job_args strips keys from list + drawer", %{conn: conn} do
+    insert!(%{
+      worker: "Stripped.Worker",
+      state: "available",
+      args: %{
+        "__original_args" => "g2wAAAAC-base64-blob",
+        "student_id" => "abc-123",
+        "metadata" => %{"causation_id" => "x"}
+      }
+    })
+
+    {:ok, _view, html} = live(conn, "/oban-resolver/jobs")
+
+    # List preview column: encoded blob is gone, real keys remain.
+    refute html =~ "__original_args"
+    refute html =~ "g2wAAAAC-base64-blob"
+    assert html =~ "student_id"
+
+    # Detail drawer: same — open it and re-check.
+    job_id =
+      html
+      |> then(&Regex.run(~r/jobs-(\d+)/, &1))
+      |> List.last()
+
+    {:ok, _drawer, drawer_html} = live(conn, "/oban-resolver/jobs/#{job_id}")
+    refute drawer_html =~ "__original_args"
+    assert drawer_html =~ "student_id"
+  end
+
+  test "default resolver leaves args untouched (the wiring control)", %{conn: conn} do
+    insert!(%{worker: "Raw.Worker", state: "available", args: %{"__original_args" => "blob"}})
+
+    {:ok, _view, html} = live(conn, "/oban/jobs")
+
+    # /oban mounts WITHOUT a custom resolver → raw args, including the key.
+    assert html =~ "__original_args"
+  end
+
   test "state-tab toggle is preserved across form changes", %{conn: conn} do
     insert!(%{state: "discarded", worker: "X.Worker"})
     insert!(%{state: "completed", worker: "X.Worker"})
