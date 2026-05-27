@@ -1260,6 +1260,18 @@ video {
   }
 }
 
+.oban-ui-sidebar {
+  /* Pin to the viewport so the bottom shortcuts hint stays visible even when
+   * the main content (e.g. a long jobs table) makes the page much taller than
+   * the screen. Without this the sidebar stretches to the full content height
+   * and the flex-1 nav pushes the shortcuts thousands of pixels down. */
+  position: sticky;
+  top: 0px;
+  height: 100vh;
+  align-self: flex-start;
+  overflow-y: auto;
+}
+
 .oban-ui-main {
   display: flex;
   min-width: 0px;
