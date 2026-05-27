@@ -855,38 +855,38 @@ defmodule ObanUI.Web.JobsLive do
             <td>{job.priority}</td>
             <td>{job.attempt}/{job.max_attempts}</td>
             <td><.relative_time datetime={job.inserted_at} /></td>
-            <td class="text-right space-x-1" onclick="event.stopPropagation()">
-              <.button
-                variant="secondary"
-                can?={
-                  @access.retry_jobs and
-                    job.state in ~w(cancelled discarded retryable scheduled completed)
-                }
-                phx-click="retry"
-                phx-value-id={job.id}
-              >
-                Retry
-              </.button>
-              <.button
-                variant="secondary"
-                can?={
-                  @access.cancel_jobs and job.state in ~w(available scheduled executing retryable)
-                }
-                phx-click="cancel"
-                phx-value-id={job.id}
-                data-confirm="Cancel this job?"
-              >
-                Cancel
-              </.button>
-              <.button
-                variant="danger"
-                can?={@access.delete_jobs}
-                phx-click="delete"
-                phx-value-id={job.id}
-                data-confirm="Permanently delete this job?"
-              >
-                Delete
-              </.button>
+            <td class="text-right" onclick="event.stopPropagation()">
+              <.kebab_menu id={"actions-#{job.id}"} label={"Actions for job #{job.id}"}>
+                <.menu_item
+                  can?={
+                    @access.retry_jobs and
+                      job.state in ~w(cancelled discarded retryable scheduled completed)
+                  }
+                  phx-click="retry"
+                  phx-value-id={job.id}
+                >
+                  Retry
+                </.menu_item>
+                <.menu_item
+                  can?={
+                    @access.cancel_jobs and job.state in ~w(available scheduled executing retryable)
+                  }
+                  phx-click="cancel"
+                  phx-value-id={job.id}
+                  data-confirm="Cancel this job?"
+                >
+                  Cancel
+                </.menu_item>
+                <.menu_item
+                  variant="danger"
+                  can?={@access.delete_jobs}
+                  phx-click="delete"
+                  phx-value-id={job.id}
+                  data-confirm="Permanently delete this job?"
+                >
+                  Delete
+                </.menu_item>
+              </.kebab_menu>
             </td>
           </tr>
         </tbody>

@@ -172,74 +172,31 @@ const DrawerFocusTrap = {
 };
 
 // ---------------------------------------------------------------------------
-// Global keyboard shortcuts
-//   "/"  focuses the first filter input on the page
-//   "?"  toggles a help overlay (if present)
-//   "g j/q/c/d" go-to navigation (jobs/queues/crons/dashboard)
+// Sidebar collapse toggle
+//
+// State lives as a class on <html> (like the theme), so LiveView's DOM
+// patching across live navigations never resets it, and it persists in
+// localStorage between visits.
 // ---------------------------------------------------------------------------
 
-const KeyboardShortcuts = {
+const SIDEBAR_KEY = "oban_ui_sidebar_collapsed";
+
+function applySidebar() {
+  const collapsed = localStorage.getItem(SIDEBAR_KEY) === "1";
+  document.documentElement.classList.toggle("oban-ui-sidebar-collapsed", collapsed);
+}
+
+const SidebarToggle = {
   mounted() {
-    this._gPressed = false;
-    this._gTimer = null;
-    this._keydownHandler = (e) => this.handleKey(e);
-    document.addEventListener("keydown", this._keydownHandler);
+    applySidebar();
+    this.el.addEventListener("click", () => {
+      const next = localStorage.getItem(SIDEBAR_KEY) === "1" ? "0" : "1";
+      localStorage.setItem(SIDEBAR_KEY, next);
+      applySidebar();
+    });
   },
-  destroyed() {
-    document.removeEventListener("keydown", this._keydownHandler);
-    if (this._gTimer) clearTimeout(this._gTimer);
-  },
-  handleKey(e) {
-    // Ignore when typing into a form control
-    const target = e.target;
-    const tag = (target && target.tagName) || "";
-    if (
-      tag === "INPUT" ||
-      tag === "TEXTAREA" ||
-      tag === "SELECT" ||
-      (target && target.isContentEditable)
-    ) {
-      return;
-    }
-
-    if (this._gPressed) {
-      const base = this.el.dataset.basePath || "/oban";
-      switch (e.key) {
-        case "d": case "h":
-          window.location.assign(base + "/");
-          break;
-        case "j":
-          window.location.assign(base + "/jobs");
-          break;
-        case "q":
-          window.location.assign(base + "/queues");
-          break;
-        case "c":
-          window.location.assign(base + "/crons");
-          break;
-      }
-      this._gPressed = false;
-      if (this._gTimer) clearTimeout(this._gTimer);
-      return;
-    }
-
-    if (e.key === "/") {
-      const first = document.querySelector(
-        "form input:not([type=hidden]):not([disabled])"
-      );
-      if (first) {
-        e.preventDefault();
-        first.focus();
-      }
-    } else if (e.key === "g") {
-      this._gPressed = true;
-      this._gTimer = setTimeout(() => (this._gPressed = false), 1200);
-    } else if (e.key === "Escape") {
-      const closeBtn = document.querySelector(
-        '[phx-click="close_detail"], [aria-label="Close"]'
-      );
-      if (closeBtn) closeBtn.click();
-    }
+  updated() {
+    applySidebar();
   }
 };
 
@@ -248,9 +205,83 @@ const Hooks = {
   Sparkline,
   ConfirmAction,
   DrawerFocusTrap,
-  KeyboardShortcuts,
+  SidebarToggle,
   Indeterminate
 };
+
+// ---------------------------------------------------------------------------
+// Global keyboard shortcuts
+//
+// Attached once to `document` at page load (NOT per-LiveView hook), so it
+// keeps working after every live navigation — a hook's listener can be torn
+// down when its element is patched, which is why the shortcuts felt dead on
+// some pages. The base path is read live from the shell element on each
+// keypress, so it's always correct for the current mount.
+//   "/"          focus the first filter input
+//   "g d/j/q/c"  go to dashboard / jobs / queues / crons
+//   "Esc"        close an open detail drawer
+// ---------------------------------------------------------------------------
+
+let gPressed = false;
+let gTimer = null;
+
+function basePath() {
+  const shell = document.getElementById("oban-ui-shell");
+  return (shell && shell.dataset.basePath) || "/oban";
+}
+
+function handleShortcut(e) {
+  const target = e.target;
+  const tag = (target && target.tagName) || "";
+  if (
+    tag === "INPUT" ||
+    tag === "TEXTAREA" ||
+    tag === "SELECT" ||
+    (target && target.isContentEditable)
+  ) {
+    return;
+  }
+
+  if (gPressed) {
+    const base = basePath();
+    switch (e.key) {
+      case "d":
+      case "h":
+        window.location.assign(base + "/");
+        break;
+      case "j":
+        window.location.assign(base + "/jobs");
+        break;
+      case "q":
+        window.location.assign(base + "/queues");
+        break;
+      case "c":
+        window.location.assign(base + "/crons");
+        break;
+    }
+    gPressed = false;
+    if (gTimer) clearTimeout(gTimer);
+    return;
+  }
+
+  if (e.key === "/") {
+    const first = document.querySelector(
+      "form input:not([type=hidden]):not([disabled])"
+    );
+    if (first) {
+      e.preventDefault();
+      first.focus();
+    }
+  } else if (e.key === "g") {
+    gPressed = true;
+    gTimer = setTimeout(() => (gPressed = false), 1200);
+  } else if (e.key === "Escape") {
+    const closeBtn = document.querySelector(
+      '[phx-click="close_detail"], [aria-label="Close detail"]'
+    );
+    if (closeBtn) closeBtn.click();
+  }
+}
 
 // ---------------------------------------------------------------------------
 // LiveSocket bootstrap
@@ -283,6 +314,11 @@ function start() {
   liveSocket.socket.onOpen(() => markDisconnected(false));
 
   liveSocket.connect();
+
+  // Global keyboard shortcuts + initial sidebar state. Both are document /
+  // <html> level so they survive live navigation between dashboard pages.
+  document.addEventListener("keydown", handleShortcut);
+  applySidebar();
 
   window.ObanUI = window.ObanUI || {};
   window.ObanUI.liveSocket = liveSocket;

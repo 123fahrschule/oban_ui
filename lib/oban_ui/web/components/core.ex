@@ -7,6 +7,8 @@ defmodule ObanUI.Web.Components.Core do
 
   import Phoenix.HTML, only: [raw: 1]
 
+  alias Phoenix.LiveView.JS
+
   @doc """
   State badge — small colored pill labelled with the state name.
   """
@@ -18,6 +20,62 @@ defmodule ObanUI.Web.Components.Core do
     <span class={["oban-ui-badge", @class]} data-state={@state}>{@state}</span>
     """
   end
+
+  @doc """
+  Inline SVG icon set used by the sidebar nav and action menus. Heroicons-
+  style outline glyphs, sized via the `class` attr (default 1.25rem square).
+  """
+  attr :name, :string,
+    required: true,
+    values: ~w(dashboard jobs queues crons kebab sidebar)
+
+  attr :class, :string, default: "w-5 h-5"
+
+  def icon(assigns) do
+    ~H"""
+    <svg
+      class={@class}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.7"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      {Phoenix.HTML.raw(icon_paths(@name))}
+    </svg>
+    """
+  end
+
+  # squares-2x2
+  defp icon_paths("dashboard"),
+    do:
+      ~s(<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>)
+
+  # list-bullet
+  defp icon_paths("jobs"),
+    do:
+      ~s(<line x1="8" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="8" y1="18" x2="20" y2="18"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>)
+
+  # rectangle-stack
+  defp icon_paths("queues"),
+    do:
+      ~s(<rect x="3" y="4" width="18" height="5" rx="1"/><rect x="3" y="11" width="18" height="5" rx="1"/><path d="M5 18h14"/>)
+
+  # clock
+  defp icon_paths("crons"),
+    do: ~s(<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>)
+
+  # ellipsis-vertical
+  defp icon_paths("kebab"),
+    do:
+      ~s(<circle cx="12" cy="5" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="12" cy="19" r="1.4"/>)
+
+  # bars-3 (hamburger / collapse toggle)
+  defp icon_paths("sidebar"),
+    do:
+      ~s(<line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/>)
 
   @doc """
   Primary, secondary, or danger button.
@@ -36,6 +94,68 @@ defmodule ObanUI.Web.Components.Core do
     <button
       type={@type}
       class={["oban-ui-btn-#{@variant}"]}
+      disabled={!@can?}
+      aria-disabled={!@can?}
+      title={if @can?, do: nil, else: @reason}
+      {@rest}
+    >
+      {render_slot(@inner_block)}
+    </button>
+    """
+  end
+
+  @doc """
+  A kebab (⋮) trigger that toggles a dropdown of actions. Saves horizontal
+  space versus a row of buttons.
+
+  `id` must be unique on the page (e.g. include the job id). The dropdown
+  closes on outside-click via `phx-click-away` and on item-click via
+  JS.hide. Pass the menu items in the inner block — typically `menu_item/1`.
+  """
+  attr :id, :string, required: true
+  attr :label, :string, default: "Actions"
+  slot :inner_block, required: true
+
+  def kebab_menu(assigns) do
+    ~H"""
+    <div class="relative inline-block text-left">
+      <button
+        type="button"
+        class="oban-ui-kebab-trigger"
+        aria-haspopup="true"
+        aria-label={@label}
+        phx-click={JS.toggle(to: "##{@id}", display: "block")}
+      >
+        <.icon name="kebab" class="w-5 h-5" />
+      </button>
+      <div
+        id={@id}
+        class="oban-ui-kebab-menu hidden"
+        role="menu"
+        phx-click-away={JS.hide(to: "##{@id}")}
+      >
+        {render_slot(@inner_block)}
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
+  A single item inside a `kebab_menu/1`. Renders as a full-width button.
+  Disabled when `can?` is false (with a tooltip reason).
+  """
+  attr :variant, :string, default: "default", values: ~w(default danger)
+  attr :can?, :boolean, default: true
+  attr :reason, :string, default: "Insufficient permissions"
+  attr :rest, :global, include: ~w(phx-click phx-value-id data-confirm)
+  slot :inner_block, required: true
+
+  def menu_item(assigns) do
+    ~H"""
+    <button
+      type="button"
+      role="menuitem"
+      class={["oban-ui-menu-item", @variant == "danger" && "oban-ui-menu-item-danger"]}
       disabled={!@can?}
       aria-disabled={!@can?}
       title={if @can?, do: nil, else: @reason}

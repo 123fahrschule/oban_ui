@@ -211,6 +211,36 @@ defmodule ObanUI.Web.JobsLiveTest do
     assert html =~ ~r/<strong>3<\/strong>\s*matching job/
   end
 
+  test "row actions render as a kebab menu, not three inline buttons", %{conn: conn} do
+    job = insert!(%{worker: "Kebab.Worker", state: "available"})
+
+    {:ok, _view, html} = live(conn, "/oban/jobs")
+
+    # One kebab trigger + dropdown per row, scoped by job id.
+    assert html =~ ~s(id="actions-#{job.id}")
+    assert html =~ "oban-ui-kebab-trigger"
+    # Menu still offers all three actions.
+    assert html =~ "Retry"
+    assert html =~ "Cancel"
+    assert html =~ "Delete"
+    # The old space-separated three-button layout is gone.
+    refute html =~ "text-right space-x-1"
+  end
+
+  test "kebab menu_item dispatches its phx-click to the server", %{conn: conn} do
+    insert!(%{worker: "Kebab.Worker", state: "discarded"})
+
+    {:ok, view, _} = live(conn, "/oban/jobs?state=discarded")
+
+    # The menu_item is a normal phx-click button. Clicking it must reach the
+    # "delete" handler exactly as the old inline button did. There's no Oban
+    # running in the sandbox, so the action errors — but the resulting flash
+    # proves the event was dispatched (the wiring works). render_click also
+    # bypasses the JS data-confirm.
+    html = view |> element(~s(button[phx-click="delete"]), "Delete") |> render_click()
+    assert html =~ "Failed" or html =~ "Not permitted"
+  end
+
   test "custom resolver's format_job_args strips keys from list + drawer", %{conn: conn} do
     insert!(%{
       worker: "Stripped.Worker",

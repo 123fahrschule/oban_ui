@@ -5,7 +5,7 @@ defmodule ObanUI.Web.Components.Layout do
 
   use Phoenix.Component
 
-  import ObanUI.Web.Components.Core, only: [theme_toggle: 1]
+  import ObanUI.Web.Components.Core, only: [theme_toggle: 1, icon: 1]
 
   attr :base_path, :string, required: true
   attr :active, :atom, required: true, values: ~w(dashboard jobs queues crons)a
@@ -16,26 +16,36 @@ defmodule ObanUI.Web.Components.Layout do
 
   def shell(assigns) do
     ~H"""
-    <div
-      class="oban-ui-layout"
-      id="oban-ui-shell"
-      phx-hook="KeyboardShortcuts"
-      data-base-path={@base_path}
-    >
+    <div class="oban-ui-layout" id="oban-ui-shell" data-base-path={@base_path}>
       <aside class="oban-ui-sidebar" aria-label="Primary navigation">
-        <div class="px-2 py-3 mb-4 border-b border-oban-800">
+        <div class="px-2 py-3 mb-4 border-b border-oban-800 oban-ui-sidebar-title">
           <p class="text-sm font-semibold tracking-wide">Oban UI</p>
           <p :if={@active_oban} class="text-xs text-slate-400 font-mono mt-1">{@active_oban}</p>
         </div>
 
         <nav class="flex-1 space-y-1" aria-label="Sections">
-          <.nav_link path={@base_path <> "/"} label="Dashboard" active={@active == :dashboard} />
-          <.nav_link path={@base_path <> "/jobs"} label="Jobs" active={@active == :jobs} />
-          <.nav_link path={@base_path <> "/queues"} label="Queues" active={@active == :queues} />
-          <.nav_link path={@base_path <> "/crons"} label="Crons" active={@active == :crons} />
+          <.nav_link
+            path={@base_path <> "/"}
+            label="Dashboard"
+            icon="dashboard"
+            active={@active == :dashboard}
+          />
+          <.nav_link path={@base_path <> "/jobs"} label="Jobs" icon="jobs" active={@active == :jobs} />
+          <.nav_link
+            path={@base_path <> "/queues"}
+            label="Queues"
+            icon="queues"
+            active={@active == :queues}
+          />
+          <.nav_link
+            path={@base_path <> "/crons"}
+            label="Crons"
+            icon="crons"
+            active={@active == :crons}
+          />
         </nav>
 
-        <p class="mt-4 px-3 text-xs text-slate-400">
+        <p class="mt-4 px-3 text-xs text-slate-400 oban-ui-sidebar-shortcuts">
           <span aria-hidden="true">⌨</span>
           <span class="sr-only">Keyboard shortcuts:</span>
           / search · g+j jobs · g+q queues · esc close
@@ -45,6 +55,16 @@ defmodule ObanUI.Web.Components.Layout do
       <div class="oban-ui-main">
         <div class="oban-ui-topbar" role="toolbar" aria-label="Account & instance">
           <div class="text-sm flex items-center gap-3">
+            <button
+              type="button"
+              class="oban-ui-sidebar-collapse"
+              id="oban-ui-sidebar-toggle"
+              phx-hook="SidebarToggle"
+              aria-label="Toggle navigation"
+              title="Toggle navigation"
+            >
+              <.icon name="sidebar" class="w-5 h-5" />
+            </button>
             <.instance_picker
               :if={length(@oban_names) > 1}
               names={@oban_names}
@@ -89,6 +109,7 @@ defmodule ObanUI.Web.Components.Layout do
 
   attr :path, :string, required: true
   attr :label, :string, required: true
+  attr :icon, :string, required: true
   attr :active, :boolean, default: false
 
   defp nav_link(assigns) do
@@ -97,8 +118,10 @@ defmodule ObanUI.Web.Components.Layout do
       navigate={@path}
       class="oban-ui-nav-link"
       aria-current={if @active, do: "page", else: nil}
+      title={@label}
     >
-      {@label}
+      <.icon name={@icon} class="w-5 h-5 shrink-0" />
+      <span class="oban-ui-nav-label">{@label}</span>
     </.link>
     """
   end

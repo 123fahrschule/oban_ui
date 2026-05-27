@@ -155,6 +155,14 @@ defmodule ObanUI.Web.DashboardLive do
 
   defp chart_all_zero?(_), do: true
 
+  # Builds a deep-link into the jobs list with a pre-applied filter.
+  # Honours the multi-instance URL prefix so clicking a tile on a
+  # secondary instance's dashboard keeps you on that instance.
+  defp jobs_filter_path(base_path, active_oban, oban_names, query) do
+    prefix = if length(oban_names) > 1, do: "/i/#{active_oban}", else: ""
+    base_path <> prefix <> "/jobs?" <> URI.encode_query(query)
+  end
+
   defp format_bucket(unix) do
     case DateTime.from_unix(unix) do
       {:ok, dt} -> Calendar.strftime(dt, "%H:%M")
@@ -207,12 +215,15 @@ defmodule ObanUI.Web.DashboardLive do
       </.page_header>
 
       <div class="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 mb-4">
-        <.card :for={
-          state <- ~w(available executing scheduled retryable completed cancelled discarded)
-        }>
+        <.link
+          :for={state <- ~w(available executing scheduled retryable completed cancelled discarded)}
+          navigate={jobs_filter_path(@base_path, @active_oban, @oban_names, %{"state" => state})}
+          class="oban-ui-card block hover:ring-2 hover:ring-oban-400 transition"
+          title={"Show #{state} jobs"}
+        >
           <p class="text-xs uppercase text-slate-500">{state}</p>
           <p class="text-2xl font-semibold">{Map.get(@counts, state, 0)}</p>
-        </.card>
+        </.link>
       </div>
 
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -253,9 +264,17 @@ defmodule ObanUI.Web.DashboardLive do
         <.card>
           <p class="text-sm font-medium mb-2">Top workers</p>
           <ul class="text-sm space-y-1">
-            <li :for={w <- @top_workers} class="flex justify-between">
-              <span class="font-mono truncate">{w.worker}</span>
-              <span class="text-slate-500">{w.count}</span>
+            <li :for={w <- @top_workers}>
+              <.link
+                navigate={
+                  jobs_filter_path(@base_path, @active_oban, @oban_names, %{"worker" => w.worker})
+                }
+                class="flex justify-between rounded px-1 -mx-1 hover:bg-slate-100"
+                title={"Show jobs for #{w.worker}"}
+              >
+                <span class="font-mono truncate">{w.worker}</span>
+                <span class="text-slate-500">{w.count}</span>
+              </.link>
             </li>
             <li :if={@top_workers == []} class="text-xs text-slate-500">No data yet.</li>
           </ul>
@@ -264,9 +283,17 @@ defmodule ObanUI.Web.DashboardLive do
         <.card>
           <p class="text-sm font-medium mb-2">Top queues</p>
           <ul class="text-sm space-y-1">
-            <li :for={q <- @top_queues} class="flex justify-between">
-              <span class="font-mono">{q.queue}</span>
-              <span class="text-slate-500">{q.count}</span>
+            <li :for={q <- @top_queues}>
+              <.link
+                navigate={
+                  jobs_filter_path(@base_path, @active_oban, @oban_names, %{"queue" => q.queue})
+                }
+                class="flex justify-between rounded px-1 -mx-1 hover:bg-slate-100"
+                title={"Show jobs in #{q.queue}"}
+              >
+                <span class="font-mono">{q.queue}</span>
+                <span class="text-slate-500">{q.count}</span>
+              </.link>
             </li>
             <li :if={@top_queues == []} class="text-xs text-slate-500">No data yet.</li>
           </ul>

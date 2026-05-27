@@ -40,11 +40,37 @@
 
 /* Nav links */
 .oban-ui-nav-link {
-  @apply block rounded-md px-3 py-2 text-sm font-medium text-slate-300 hover:bg-oban-800 hover:text-white;
+  @apply flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-slate-300 hover:bg-oban-800 hover:text-white;
 }
 
 .oban-ui-nav-link[aria-current="page"] {
   @apply bg-oban-700 text-white;
+}
+
+/* Sidebar collapse toggle (in the topbar) */
+.oban-ui-sidebar-collapse {
+  @apply hidden md:inline-flex items-center justify-center rounded-md p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-700;
+}
+
+[data-theme="dark"] .oban-ui-sidebar-collapse {
+  @apply text-slate-400 hover:bg-oban-800 hover:text-slate-100;
+}
+
+/* Collapsed sidebar: class lives on <html> so LiveView DOM patching can't
+ * reset it across live navigations. Shrinks the rail to an icon strip and
+ * hides labels; the title attribute provides the hover tooltip. */
+.oban-ui-sidebar-collapsed .oban-ui-sidebar {
+  @apply w-14 px-2;
+}
+
+.oban-ui-sidebar-collapsed .oban-ui-nav-label,
+.oban-ui-sidebar-collapsed .oban-ui-sidebar-title,
+.oban-ui-sidebar-collapsed .oban-ui-sidebar-shortcuts {
+  display: none;
+}
+
+.oban-ui-sidebar-collapsed .oban-ui-nav-link {
+  @apply justify-center px-0;
 }
 
 /* Tables */
@@ -156,6 +182,44 @@
 /* Pre/code blocks for args, errors */
 .oban-ui-pre {
   @apply rounded-md bg-slate-900 text-slate-100 p-3 text-xs overflow-x-auto font-mono;
+}
+
+/* Kebab action menu */
+.oban-ui-kebab-trigger {
+  @apply inline-flex items-center justify-center rounded-md p-1 text-slate-500 hover:bg-slate-100 hover:text-slate-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-oban-500;
+}
+
+[data-theme="dark"] .oban-ui-kebab-trigger {
+  @apply text-slate-400 hover:bg-oban-800 hover:text-slate-100;
+}
+
+.oban-ui-kebab-menu {
+  @apply absolute right-0 z-30 mt-1 w-36 rounded-md border border-slate-200 bg-white shadow-lg py-1;
+}
+
+[data-theme="dark"] .oban-ui-kebab-menu {
+  @apply bg-oban-900 border-oban-700;
+}
+
+.oban-ui-menu-item {
+  @apply block w-full text-left px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100;
+}
+
+[data-theme="dark"] .oban-ui-menu-item {
+  @apply text-slate-100 hover:bg-oban-800;
+}
+
+.oban-ui-menu-item-danger {
+  @apply text-red-600 hover:bg-red-50;
+}
+
+[data-theme="dark"] .oban-ui-menu-item-danger {
+  @apply text-red-400 hover:bg-red-950;
+}
+
+.oban-ui-menu-item[disabled],
+.oban-ui-menu-item[aria-disabled="true"] {
+  @apply opacity-50 cursor-not-allowed pointer-events-none;
 }
 
 /* Combobox dropdown visibility is server-controlled: parent LiveView clears

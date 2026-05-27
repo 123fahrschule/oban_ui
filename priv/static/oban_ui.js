@@ -8556,61 +8556,22 @@ removing illegal node: "${(childNode.outerHTML || childNode.nodeValue).trim()}"
       if (focusables.length > 0) focusables[0].focus();
     }
   };
-  var KeyboardShortcuts = {
+  var SIDEBAR_KEY = "oban_ui_sidebar_collapsed";
+  function applySidebar() {
+    const collapsed = localStorage.getItem(SIDEBAR_KEY) === "1";
+    document.documentElement.classList.toggle("oban-ui-sidebar-collapsed", collapsed);
+  }
+  var SidebarToggle = {
     mounted() {
-      this._gPressed = false;
-      this._gTimer = null;
-      this._keydownHandler = (e) => this.handleKey(e);
-      document.addEventListener("keydown", this._keydownHandler);
+      applySidebar();
+      this.el.addEventListener("click", () => {
+        const next = localStorage.getItem(SIDEBAR_KEY) === "1" ? "0" : "1";
+        localStorage.setItem(SIDEBAR_KEY, next);
+        applySidebar();
+      });
     },
-    destroyed() {
-      document.removeEventListener("keydown", this._keydownHandler);
-      if (this._gTimer) clearTimeout(this._gTimer);
-    },
-    handleKey(e) {
-      const target = e.target;
-      const tag = target && target.tagName || "";
-      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target && target.isContentEditable) {
-        return;
-      }
-      if (this._gPressed) {
-        const base = this.el.dataset.basePath || "/oban";
-        switch (e.key) {
-          case "d":
-          case "h":
-            window.location.assign(base + "/");
-            break;
-          case "j":
-            window.location.assign(base + "/jobs");
-            break;
-          case "q":
-            window.location.assign(base + "/queues");
-            break;
-          case "c":
-            window.location.assign(base + "/crons");
-            break;
-        }
-        this._gPressed = false;
-        if (this._gTimer) clearTimeout(this._gTimer);
-        return;
-      }
-      if (e.key === "/") {
-        const first = document.querySelector(
-          "form input:not([type=hidden]):not([disabled])"
-        );
-        if (first) {
-          e.preventDefault();
-          first.focus();
-        }
-      } else if (e.key === "g") {
-        this._gPressed = true;
-        this._gTimer = setTimeout(() => this._gPressed = false, 1200);
-      } else if (e.key === "Escape") {
-        const closeBtn = document.querySelector(
-          '[phx-click="close_detail"], [aria-label="Close"]'
-        );
-        if (closeBtn) closeBtn.click();
-      }
+    updated() {
+      applySidebar();
     }
   };
   var Hooks2 = {
@@ -8618,9 +8579,60 @@ removing illegal node: "${(childNode.outerHTML || childNode.nodeValue).trim()}"
     Sparkline,
     ConfirmAction,
     DrawerFocusTrap,
-    KeyboardShortcuts,
+    SidebarToggle,
     Indeterminate
   };
+  var gPressed = false;
+  var gTimer = null;
+  function basePath() {
+    const shell = document.getElementById("oban-ui-shell");
+    return shell && shell.dataset.basePath || "/oban";
+  }
+  function handleShortcut(e) {
+    const target = e.target;
+    const tag = target && target.tagName || "";
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target && target.isContentEditable) {
+      return;
+    }
+    if (gPressed) {
+      const base = basePath();
+      switch (e.key) {
+        case "d":
+        case "h":
+          window.location.assign(base + "/");
+          break;
+        case "j":
+          window.location.assign(base + "/jobs");
+          break;
+        case "q":
+          window.location.assign(base + "/queues");
+          break;
+        case "c":
+          window.location.assign(base + "/crons");
+          break;
+      }
+      gPressed = false;
+      if (gTimer) clearTimeout(gTimer);
+      return;
+    }
+    if (e.key === "/") {
+      const first = document.querySelector(
+        "form input:not([type=hidden]):not([disabled])"
+      );
+      if (first) {
+        e.preventDefault();
+        first.focus();
+      }
+    } else if (e.key === "g") {
+      gPressed = true;
+      gTimer = setTimeout(() => gPressed = false, 1200);
+    } else if (e.key === "Escape") {
+      const closeBtn = document.querySelector(
+        '[phx-click="close_detail"], [aria-label="Close detail"]'
+      );
+      if (closeBtn) closeBtn.click();
+    }
+  }
   function csrfToken() {
     const meta = document.querySelector("meta[name='csrf-token']");
     return meta ? meta.getAttribute("content") : null;
@@ -8641,6 +8653,8 @@ removing illegal node: "${(childNode.outerHTML || childNode.nodeValue).trim()}"
     liveSocket.socket.onClose(() => markDisconnected(true));
     liveSocket.socket.onOpen(() => markDisconnected(false));
     liveSocket.connect();
+    document.addEventListener("keydown", handleShortcut);
+    applySidebar();
     window.ObanUI = window.ObanUI || {};
     window.ObanUI.liveSocket = liveSocket;
     window.ObanUI.Hooks = Hooks2;
