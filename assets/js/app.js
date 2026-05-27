@@ -200,13 +200,85 @@ const SidebarToggle = {
   }
 };
 
+// ---------------------------------------------------------------------------
+// Kebab action menu
+//
+// The action cell lives inside a row whose phx-click opens the detail drawer
+// (window-delegated). A naive JS.toggle on the trigger would be swallowed if
+// we stopPropagation on the cell, and forwarded to the drawer if we don't —
+// so the menu is driven entirely client-side here instead.
+//
+//   * The trigger's own listener stops the click from bubbling to the row,
+//     so opening the menu never opens the drawer.
+//   * Only one menu is ever open: opening one closes the rest.
+//   * `updated()` re-applies our open flag after a live-refresh patch, so the
+//     ~200ms auto-reload can't snap an open menu shut.
+//   * We also notify the server (kebab_open / kebab_close) so the LiveView can
+//     pause its auto-reload while a menu is open and rows don't churn under it.
+// ---------------------------------------------------------------------------
+
+const kebabInstances = new Set();
+
+const KebabMenu = {
+  mounted() {
+    this.trigger = this.el.querySelector("[data-kebab-trigger]");
+    this.menu = this.el.querySelector("[data-kebab-menu]");
+    this.open = false;
+    kebabInstances.add(this);
+
+    this._toggle = (e) => {
+      // Keep the row's phx-click (detail drawer) from firing.
+      e.preventDefault();
+      e.stopPropagation();
+      const next = !this.open;
+      kebabInstances.forEach((inst) => {
+        if (inst !== this) inst.setOpen(false);
+      });
+      this.setOpen(next);
+    };
+    // Picking an item closes the menu right away; the item's own phx-click
+    // still reaches LiveView via window delegation.
+    this._menuClick = () => this.setOpen(false);
+
+    this.trigger.addEventListener("click", this._toggle);
+    this.menu.addEventListener("click", this._menuClick);
+  },
+  destroyed() {
+    kebabInstances.delete(this);
+    if (this.trigger) this.trigger.removeEventListener("click", this._toggle);
+    if (this.menu) this.menu.removeEventListener("click", this._menuClick);
+  },
+  updated() {
+    this.menu.classList.toggle("hidden", !this.open);
+  },
+  setOpen(open) {
+    if (open === this.open) return;
+    this.open = open;
+    this.menu.classList.toggle("hidden", !open);
+    this.pushEvent(open ? "kebab_open" : "kebab_close", {});
+  }
+};
+
+function closeAllKebabs() {
+  kebabInstances.forEach((inst) => inst.setOpen(false));
+}
+
+function handleKebabOutside(e) {
+  // Trigger clicks call stopPropagation, so they never reach here. A click
+  // inside an open menu (its items) is handled by the menu itself; anything
+  // else closes every open menu.
+  if (e.target.closest("[data-kebab-menu]")) return;
+  closeAllKebabs();
+}
+
 const Hooks = {
   ThemeToggle,
   Sparkline,
   ConfirmAction,
   DrawerFocusTrap,
   SidebarToggle,
-  Indeterminate
+  Indeterminate,
+  KebabMenu
 };
 
 // ---------------------------------------------------------------------------
@@ -276,6 +348,7 @@ function handleShortcut(e) {
     gPressed = true;
     gTimer = setTimeout(() => (gPressed = false), 1200);
   } else if (e.key === "Escape") {
+    closeAllKebabs();
     const closeBtn = document.querySelector(
       '[phx-click="close_detail"], [aria-label="Close detail"]'
     );
@@ -318,6 +391,9 @@ function start() {
   // Global keyboard shortcuts + initial sidebar state. Both are document /
   // <html> level so they survive live navigation between dashboard pages.
   document.addEventListener("keydown", handleShortcut);
+  // Close any open kebab menu on an outside click (registered once, globally,
+  // for the same survive-navigation reason).
+  document.addEventListener("click", handleKebabOutside);
   applySidebar();
 
   window.ObanUI = window.ObanUI || {};

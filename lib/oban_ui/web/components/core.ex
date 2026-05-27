@@ -7,8 +7,6 @@ defmodule ObanUI.Web.Components.Core do
 
   import Phoenix.HTML, only: [raw: 1]
 
-  alias Phoenix.LiveView.JS
-
   @doc """
   State badge — small colored pill labelled with the state name.
   """
@@ -118,22 +116,17 @@ defmodule ObanUI.Web.Components.Core do
 
   def kebab_menu(assigns) do
     ~H"""
-    <div class="relative inline-block text-left">
+    <div class="relative inline-block text-left" id={@id <> "-wrap"} phx-hook="KebabMenu">
       <button
         type="button"
         class="oban-ui-kebab-trigger"
+        data-kebab-trigger=""
         aria-haspopup="true"
         aria-label={@label}
-        phx-click={JS.toggle(to: "##{@id}", display: "block")}
       >
         <.icon name="kebab" class="w-5 h-5" />
       </button>
-      <div
-        id={@id}
-        class="oban-ui-kebab-menu hidden"
-        role="menu"
-        phx-click-away={JS.hide(to: "##{@id}")}
-      >
+      <div id={@id} class="oban-ui-kebab-menu hidden" data-kebab-menu="" role="menu">
         {render_slot(@inner_block)}
       </div>
     </div>

@@ -8574,13 +8574,56 @@ removing illegal node: "${(childNode.outerHTML || childNode.nodeValue).trim()}"
       applySidebar();
     }
   };
+  var kebabInstances = /* @__PURE__ */ new Set();
+  var KebabMenu = {
+    mounted() {
+      this.trigger = this.el.querySelector("[data-kebab-trigger]");
+      this.menu = this.el.querySelector("[data-kebab-menu]");
+      this.open = false;
+      kebabInstances.add(this);
+      this._toggle = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const next = !this.open;
+        kebabInstances.forEach((inst) => {
+          if (inst !== this) inst.setOpen(false);
+        });
+        this.setOpen(next);
+      };
+      this._menuClick = () => this.setOpen(false);
+      this.trigger.addEventListener("click", this._toggle);
+      this.menu.addEventListener("click", this._menuClick);
+    },
+    destroyed() {
+      kebabInstances.delete(this);
+      if (this.trigger) this.trigger.removeEventListener("click", this._toggle);
+      if (this.menu) this.menu.removeEventListener("click", this._menuClick);
+    },
+    updated() {
+      this.menu.classList.toggle("hidden", !this.open);
+    },
+    setOpen(open) {
+      if (open === this.open) return;
+      this.open = open;
+      this.menu.classList.toggle("hidden", !open);
+      this.pushEvent(open ? "kebab_open" : "kebab_close", {});
+    }
+  };
+  function closeAllKebabs() {
+    kebabInstances.forEach((inst) => inst.setOpen(false));
+  }
+  function handleKebabOutside(e) {
+    if (e.target.closest("[data-kebab-menu]")) return;
+    closeAllKebabs();
+  }
   var Hooks2 = {
     ThemeToggle,
     Sparkline,
     ConfirmAction,
     DrawerFocusTrap,
     SidebarToggle,
-    Indeterminate
+    Indeterminate,
+    KebabMenu
   };
   var gPressed = false;
   var gTimer = null;
@@ -8627,6 +8670,7 @@ removing illegal node: "${(childNode.outerHTML || childNode.nodeValue).trim()}"
       gPressed = true;
       gTimer = setTimeout(() => gPressed = false, 1200);
     } else if (e.key === "Escape") {
+      closeAllKebabs();
       const closeBtn = document.querySelector(
         '[phx-click="close_detail"], [aria-label="Close detail"]'
       );
@@ -8654,6 +8698,7 @@ removing illegal node: "${(childNode.outerHTML || childNode.nodeValue).trim()}"
     liveSocket.socket.onOpen(() => markDisconnected(false));
     liveSocket.connect();
     document.addEventListener("keydown", handleShortcut);
+    document.addEventListener("click", handleKebabOutside);
     applySidebar();
     window.ObanUI = window.ObanUI || {};
     window.ObanUI.liveSocket = liveSocket;

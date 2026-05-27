@@ -65,6 +65,10 @@ defmodule ObanUI.Web.JobsLive do
       |> assign(:bulk_state, nil)
       |> assign(:edit_form, nil)
       |> assign(:expand_args, false)
+      # True while a row's kebab action menu is open. The live-refresh tick
+      # backs off so an auto-reload can't reorder rows / re-render the menu
+      # shut under the operator's cursor.
+      |> assign(:menu_open, false)
       |> assign(:suggestions, %{worker: [], queue: [], tags: [], nodes: []})
       |> stream(:jobs, [])
 
@@ -207,6 +211,11 @@ defmodule ObanUI.Web.JobsLive do
       socket.assigns[:reload_pending] ->
         {:noreply, socket}
 
+      socket.assigns[:menu_open] ->
+        # A kebab action menu is open; reloading would re-render the row and
+        # snap it shut. Hold off until the menu closes.
+        {:noreply, socket}
+
       socket.assigns.loaded_pages > 1 ->
         # User is browsing older history via "Load more"; an auto-refresh
         # would yank them back to page 1. Skip the tick.
@@ -337,6 +346,14 @@ defmodule ObanUI.Web.JobsLive do
   def handle_event("retry", %{"id" => id}, socket), do: handle_action(socket, :retry, id)
   def handle_event("cancel", %{"id" => id}, socket), do: handle_action(socket, :cancel, id)
   def handle_event("delete", %{"id" => id}, socket), do: handle_action(socket, :delete, id)
+
+  # The KebabMenu JS hook reports open/close so the live-refresh tick can
+  # pause while a menu is open (see the :tick handler).
+  def handle_event("kebab_open", _params, socket),
+    do: {:noreply, assign(socket, :menu_open, true)}
+
+  def handle_event("kebab_close", _params, socket),
+    do: {:noreply, assign(socket, :menu_open, false)}
 
   def handle_event("expand_args", _params, socket) do
     {:noreply, assign(socket, :expand_args, true)}
@@ -755,21 +772,21 @@ defmodule ObanUI.Web.JobsLive do
             phx-debounce="400"
           />
         </.filter_cell>
-        <label class="text-xs text-slate-500 sm:col-span-1 flex items-center gap-1">
-          <span>from</span>
+        <label class="text-xs text-slate-500 flex items-center gap-1 min-w-0 sm:col-span-3 lg:col-span-2">
+          <span class="shrink-0">from</span>
           <input
             name="from"
             type="datetime-local"
-            class="oban-ui-input text-xs py-1"
+            class="oban-ui-input text-xs py-1 min-w-0 flex-1"
             value={format_dt_input(@filters[:inserted_after])}
           />
         </label>
-        <label class="text-xs text-slate-500 sm:col-span-1 flex items-center gap-1">
-          <span>to</span>
+        <label class="text-xs text-slate-500 flex items-center gap-1 min-w-0 sm:col-span-3 lg:col-span-2">
+          <span class="shrink-0">to</span>
           <input
             name="to"
             type="datetime-local"
-            class="oban-ui-input text-xs py-1"
+            class="oban-ui-input text-xs py-1 min-w-0 flex-1"
             value={format_dt_input(@filters[:inserted_before])}
           />
         </label>
@@ -834,7 +851,15 @@ defmodule ObanUI.Web.JobsLive do
             phx-click={JS.patch(detail_path(@socket, @base_path, @oban_names, @active_oban, job.id))}
             class="cursor-pointer hover:bg-slate-50"
           >
-            <td onclick="event.stopPropagation()">
+            <%!--
+              The checkbox and actions cells carry a no-op phx-click. LiveView
+              dispatches a click to the *closest* phx-click ancestor, so giving
+              these cells their own (inert) binding stops a stray click on the
+              cell padding from bubbling up to the row's detail-drawer patch.
+              We can't use onclick="event.stopPropagation()" — that swallows
+              the window-delegated phx-click on the checkbox and kebab too.
+            --%>
+            <td phx-click={JS.dispatch("oban-ui:noop")}>
               <input
                 type="checkbox"
                 phx-click="toggle_select"
@@ -855,7 +880,7 @@ defmodule ObanUI.Web.JobsLive do
             <td>{job.priority}</td>
             <td>{job.attempt}/{job.max_attempts}</td>
             <td><.relative_time datetime={job.inserted_at} /></td>
-            <td class="text-right" onclick="event.stopPropagation()">
+            <td class="text-right" phx-click={JS.dispatch("oban-ui:noop")}>
               <.kebab_menu id={"actions-#{job.id}"} label={"Actions for job #{job.id}"}>
                 <.menu_item
                   can?={
