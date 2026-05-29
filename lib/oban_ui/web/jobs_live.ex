@@ -869,7 +869,16 @@ defmodule ObanUI.Web.JobsLive do
               />
             </td>
             <td class="font-mono">{job.id}</td>
-            <td><.state_badge state={job.state} /></td>
+            <td>
+              <.state_badge state={job.state} />
+              <span
+                :if={job.state in ~w(scheduled retryable) and job.scheduled_at}
+                class="block text-[11px] text-slate-400 mt-0.5"
+                title="When this job becomes runnable"
+              >
+                runs <.relative_time datetime={job.scheduled_at} />
+              </span>
+            </td>
             <td>{job.queue}</td>
             <td class="font-mono text-xs">{job.worker}</td>
             <td class="font-mono text-xs text-slate-600 max-w-xs">
@@ -1200,6 +1209,14 @@ defmodule ObanUI.Web.JobsLive do
             <.state_badge state={@job.state} />
             · {@job.queue} · attempt {@job.attempt}/{@job.max_attempts}
           </p>
+          <p
+            :if={@job.state in ~w(scheduled retryable) and @job.scheduled_at}
+            class="text-xs text-violet-700 mt-1"
+            title="This job is parked until its scheduled time, then it runs."
+          >
+            Runs <.relative_time datetime={@job.scheduled_at} />
+            <span class="text-slate-400">· {format_abs(@job.scheduled_at)}</span>
+          </p>
         </div>
         <button
           type="button"
@@ -1351,6 +1368,12 @@ defmodule ObanUI.Web.JobsLive do
     </div>
     """
   end
+
+  # Absolute UTC timestamp for the "runs at" line in the drawer. Oban stores
+  # timestamps as UTC, so we label them as such to avoid timezone confusion.
+  defp format_abs(%DateTime{} = dt), do: Calendar.strftime(dt, "%Y-%m-%d %H:%M:%S UTC")
+  defp format_abs(%NaiveDateTime{} = ndt), do: Calendar.strftime(ndt, "%Y-%m-%d %H:%M:%S UTC")
+  defp format_abs(_), do: "—"
 
   defp format_bytes(nil), do: "—"
   defp format_bytes(n) when n < 1024, do: "#{n} B"

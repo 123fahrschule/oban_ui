@@ -281,9 +281,16 @@ defmodule ObanUI.Web.Components.Core do
 
   defp relative(_, nil_label), do: nil_label
 
-  defp format_diff(diff) when diff < 0, do: "in the future"
+  # Negative diff = the timestamp is in the future (e.g. a scheduled job's
+  # next run time). Format it as "in 12m" rather than a bare "ago".
+  defp format_diff(diff) when diff < 0, do: format_future(-diff)
   defp format_diff(diff) when diff < 60, do: "#{diff}s ago"
   defp format_diff(diff) when diff < 3600, do: "#{div(diff, 60)}m ago"
   defp format_diff(diff) when diff < 86_400, do: "#{div(diff, 3600)}h ago"
   defp format_diff(diff), do: "#{div(diff, 86_400)}d ago"
+
+  defp format_future(diff) when diff < 60, do: "in #{diff}s"
+  defp format_future(diff) when diff < 3600, do: "in #{div(diff, 60)}m"
+  defp format_future(diff) when diff < 86_400, do: "in #{div(diff, 3600)}h"
+  defp format_future(diff), do: "in #{div(diff, 86_400)}d"
 end

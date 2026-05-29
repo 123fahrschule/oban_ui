@@ -279,6 +279,28 @@ defmodule ObanUI.Web.JobsLiveTest do
     assert html =~ "__original_args"
   end
 
+  test "scheduled jobs surface their future run time in the list", %{conn: conn} do
+    future = DateTime.add(DateTime.utc_now(), 20 * 60, :second)
+    insert!(%{worker: "Future.Worker", state: "scheduled", scheduled_at: future})
+
+    {:ok, _view, html} = live(conn, "/oban/jobs?state=scheduled")
+
+    # The State cell appends a relative "runs in Xm" hint (no dedicated column).
+    assert html =~ "runs"
+    assert html =~ ~r/in \d+m/
+  end
+
+  test "scheduled job detail drawer shows the absolute run time", %{conn: conn} do
+    future = DateTime.add(DateTime.utc_now(), 20 * 60, :second)
+    job = insert!(%{worker: "Future.Worker", state: "scheduled", scheduled_at: future})
+
+    {:ok, _view, html} = live(conn, "/oban/jobs/#{job.id}")
+
+    assert html =~ "Runs"
+    # Absolute UTC stamp, e.g. "2026-05-27 19:17:21 UTC".
+    assert html =~ ~r/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC/
+  end
+
   test "state-tab toggle is preserved across form changes", %{conn: conn} do
     insert!(%{state: "discarded", worker: "X.Worker"})
     insert!(%{state: "completed", worker: "X.Worker"})
